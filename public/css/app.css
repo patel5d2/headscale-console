@@ -575,3 +575,17 @@ button.stat { font: inherit; text-align: left; cursor: pointer; }
 .row-link { cursor: pointer; }
 .row-link:hover td { background: var(--surface-2); }
 .log-msg { font-family: var(--mono); font-size: 12px; white-space: pre-wrap; word-break: break-word; }
+
+/* Policy diff */
+.diff { font-family: var(--mono); font-size: 12.5px; border: 1px solid var(--border); border-radius: var(--radius); overflow-x: auto; background: var(--surface); }
+.diff-line { white-space: pre; padding: 0 12px; line-height: 1.6; }
+.diff-add { background: var(--success-soft); color: var(--success); }
+.diff-del { background: var(--danger-soft); color: var(--danger); }
+.diff-ctx { color: var(--text-2); }
+.diff-gap { padding: 2px 12px; color: var(--text-3); background: var(--surface-2); }
+
+/* Browser SSH */
+.ssh-term { height: calc(100vh - 300px); min-height: 320px; padding: 8px; background: #0b0d10; border-radius: var(--radius); overflow: hidden; }
+.ssh-term[hidden] { display: none; }
+.ssh-status { margin-left: auto; }
+.toolbar .inline-label .input { width: auto; min-width: 140px; }

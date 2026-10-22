@@ -10,6 +10,7 @@ services:
     environment:
       # Recommended: lock the console to your Headscale server. The login page
       # then only asks for the API key, and the proxy can't be pointed elsewhere.
+      # Required for Browser SSH.
       # HEADSCALE_URL: "https://headscale.example.com"
 
       # If HEADSCALE_URL is not set, optionally restrict which hosts can be entered.

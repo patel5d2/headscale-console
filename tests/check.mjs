@@ -28,6 +28,13 @@ assert.equal(parseEntry({ t: 1, p: 3, m: 'plain failure' }).level, 'error');
 assert.equal(parseEntry({ t: 1, p: 6, m: 'plain line' }).level, 'info');
 assert.equal(pattern('failed node=12 ip=1.2.3.4 after 30s'), pattern('failed node=7 ip=5.6.7.8 after 31s'));
 
+// lineDiff: minimal edit script that reproduces both sides.
+const { lineDiff } = await import('../public/js/util.js');
+const d = lineDiff('a\nb\nc\nd', 'a\nc\nx\nd');
+assert.deepEqual(d.map((r) => r.op + r.line), [' a', '-b', ' c', '+x', ' d']);
+assert.equal(d.filter((r) => r.op !== '+').map((r) => r.line).join('\n'), 'a\nb\nc\nd');
+assert.equal(d.filter((r) => r.op !== '-').map((r) => r.line).join('\n'), 'a\nc\nx\nd');
+
 // upCommand: macOS uses the app's bundled CLI.
 assert.equal(upCommand('mac', 'https://hs.example.com', 'hskey-auth-X', [], { acceptRoutes: true, acceptDns: true }),
   'sudo /Applications/Tailscale.app/Contents/MacOS/Tailscale up --auth-key=hskey-auth-X --login-server=https://hs.example.com --accept-routes');

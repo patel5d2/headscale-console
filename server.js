@@ -20,6 +20,8 @@
  *   HOST_ACTIONS             "true" to enable logs + one-click updates when the console
  *                            runs on the Headscale VM (see host.js). Needs HEADSCALE_URL.
  *   HEADSCALE_UNIT           systemd unit whose journal is shown (default "headscale").
+ *   BROWSER_SSH              "false" to turn off Browser SSH. It's on when HEADSCALE_URL is
+ *                            set and public/ssh/hp_ssh.wasm exists (scripts/build-ssh.sh).
  */
 'use strict';
 
@@ -37,6 +39,10 @@ const ALLOWED_HOSTS = (process.env.ALLOWED_HEADSCALE_HOSTS || '')
 const INSECURE_TLS = /^(1|true|yes)$/i.test(process.env.HEADSCALE_INSECURE_TLS || '');
 const TIMEOUT = parseInt(process.env.PROXY_TIMEOUT_MS || '20000', 10);
 const PUBLIC_DIR = path.join(__dirname, 'public');
+// Browser SSH runs a Tailscale client in the page. Its control connection goes
+// through this server, and only ever to the locked Headscale URL.
+const BROWSER_SSH = !!LOCKED_URL && !/^(0|false|no)$/i.test(process.env.BROWSER_SSH || '') &&
+  fs.existsSync(path.join(PUBLIC_DIR, 'ssh', 'hp_ssh.wasm'));
 const MAX_BODY = 2 * 1024 * 1024; // policies can be large-ish; 2 MB is plenty
 
 const insecureAgent = new https.Agent({ rejectUnauthorized: false, keepAlive: true });
@@ -53,6 +59,7 @@ const MIME = {
   '.json': 'application/json; charset=utf-8',
   '.webmanifest': 'application/manifest+json',
   '.txt': 'text/plain; charset=utf-8',
+  '.wasm': 'application/wasm',
 };
 
 const SECURITY_HEADERS = {
@@ -62,9 +69,11 @@ const SECURITY_HEADERS = {
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
   'Cross-Origin-Opener-Policy': 'same-origin',
   'Cross-Origin-Resource-Policy': 'same-origin',
+  // Browser SSH must compile WebAssembly and reach DERP relays (wss/https) directly.
   'Content-Security-Policy':
     "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; " +
-    "script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+    `script-src 'self'${BROWSER_SSH ? " 'wasm-unsafe-eval'" : ''}; connect-src 'self'${BROWSER_SSH ? ' wss: https:' : ''}; ` +
+    "frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
 };
 
 function normalizeBase(raw) {
@@ -99,7 +108,7 @@ function log(...args) {
 // ---------------------------------------------------------------- proxy ----
 
 // Only these upstream paths are reachable through the proxy.
-const ALLOWED_UPSTREAM = /^(api\/v1\/[A-Za-z0-9_\-./%:@]*|version|health)$/;
+const ALLOWED_UPSTREAM = /^(api\/v1\/[A-Za-z0-9_\-./%:@]*|version|health|key)$/;
 
 function handleProxy(req, res, rest, search) {
   if (!ALLOWED_UPSTREAM.test(rest) || rest.includes('..')) {
@@ -207,7 +216,8 @@ const host = require('./host.js')({ lockedUrl: LOCKED_URL, upstreamStatus, sendJ
 // --------------------------------------------------------------- static ----
 
 function serveStatic(req, res, pathname) {
-  let rel = decodeURIComponent(pathname).replace(/^\/+/, '');
+  let rel;
+  try { rel = decodeURIComponent(pathname).replace(/^\/+/, ''); } catch { return sendJSON(res, 400, { message: 'Bad request' }); }
   if (!rel) rel = 'index.html';
   let file = path.normalize(path.join(PUBLIC_DIR, rel));
   if (file !== PUBLIC_DIR && !file.startsWith(PUBLIC_DIR + path.sep)) return sendJSON(res, 403, { message: 'Forbidden' });
@@ -223,13 +233,16 @@ function serveStatic(req, res, pathname) {
     }
     const ext = path.extname(file).toLowerCase();
     const isHtml = ext === '.html';
+    // Serve a precompressed sibling when there is one (the SSH client: 30 MB → 7 MB).
+    const gz = /\bgzip\b/.test(req.headers['accept-encoding'] || '') && fs.existsSync(file + '.gz');
     res.writeHead(200, {
       ...SECURITY_HEADERS,
       'Content-Type': MIME[ext] || 'application/octet-stream',
       'Cache-Control': isHtml ? 'no-cache' : 'public, max-age=300',
+      ...(gz ? { 'Content-Encoding': 'gzip', Vary: 'Accept-Encoding' } : {}),
     });
     if (req.method === 'HEAD') return res.end();
-    fs.createReadStream(file).pipe(res);
+    fs.createReadStream(gz ? file + '.gz' : file).pipe(res);
   });
 }
 
@@ -252,8 +265,12 @@ const server = http.createServer((req, res) => {
       allowedHosts: ALLOWED_HOSTS,
       insecureTls: INSECURE_TLS,
       hostActions: host.enabled,
+      browserSsh: BROWSER_SSH,
     });
   }
+
+  // Control-plane key fetch for the Browser SSH client (see the upgrade handler below).
+  if (p === '/key' && BROWSER_SSH && req.method === 'GET') return handleProxy(req, res, 'key', url.search);
 
   if (p.startsWith('/host/')) return host.handle(req, res, p.slice('/host/'.length), url.searchParams);
 
@@ -265,11 +282,54 @@ const server = http.createServer((req, res) => {
   return serveStatic(req, res, p);
 });
 
+// Browser SSH: the in-page Tailscale client speaks Tailscale's control protocol over
+// a WebSocket to /ts2021. Relay it unchanged to the locked Headscale server. Headscale
+// serves this endpoint publicly anyway; relaying keeps the browser same-origin, so
+// Headscale needs no CORS setup.
+const WS_HEADERS = ['upgrade', 'connection', 'sec-websocket-key', 'sec-websocket-version', 'sec-websocket-protocol', 'sec-websocket-extensions'];
+
+server.on('upgrade', (req, socket, head) => {
+  let url;
+  try { url = new URL(req.url, 'http://localhost'); } catch { return socket.destroy(); }
+  if (!BROWSER_SSH || url.pathname !== '/ts2021' || req.method !== 'GET') return socket.destroy();
+
+  const target = new URL(LOCKED_URL + '/ts2021' + url.search);
+  const headers = {};
+  for (const k of WS_HEADERS) if (req.headers[k]) headers[k] = req.headers[k]; // no Origin, cookies or auth
+  const upReq = (target.protocol === 'https:' ? https : http).request(target, {
+    headers, agent: false, rejectUnauthorized: !INSECURE_TLS, timeout: TIMEOUT,
+  });
+
+  upReq.on('upgrade', (up, upSocket, upHead) => {
+    upReq.setTimeout(0);
+    let raw = `HTTP/1.1 ${up.statusCode} ${up.statusMessage}\r\n`;
+    for (let i = 0; i < up.rawHeaders.length; i += 2) raw += `${up.rawHeaders[i]}: ${up.rawHeaders[i + 1]}\r\n`;
+    socket.write(raw + '\r\n');
+    if (upHead.length) socket.write(upHead);
+    if (head.length) upSocket.write(head);
+    upSocket.pipe(socket).pipe(upSocket);
+    for (const [a, b] of [[upSocket, socket], [socket, upSocket]]) {
+      a.on('error', () => b.destroy());
+      a.on('close', () => b.destroy());
+    }
+    log('WS /ts2021 -> 101 (Browser SSH control connection)');
+  });
+  upReq.on('response', (up) => { // Headscale refused the upgrade: pass its status through
+    socket.end(`HTTP/1.1 ${up.statusCode} ${up.statusMessage}\r\nConnection: close\r\n\r\n`);
+    up.resume();
+  });
+  upReq.on('timeout', () => upReq.destroy(new Error('Upstream timed out')));
+  upReq.on('error', (err) => { log(`WS /ts2021 -> error: ${err.message}`); socket.destroy(); });
+  socket.on('error', () => upReq.destroy());
+  upReq.end();
+});
+
 server.listen(PORT, HOST, () => {
   log(`Headscale Console listening on http://${HOST}:${PORT}`);
   if (LOCKED_URL) log(`Locked to Headscale server: ${LOCKED_URL}`);
   else if (ALLOWED_HOSTS.length) log(`Proxy restricted to hosts: ${ALLOWED_HOSTS.join(', ')}`);
   else log('Proxy accepts any Headscale URL entered at login (set HEADSCALE_URL to lock it down)');
+  if (BROWSER_SSH) log('Browser SSH enabled');
   if (host.enabled) log(`Host actions enabled (logs + updates for unit "${process.env.HEADSCALE_UNIT || 'headscale'}")`);
   if (INSECURE_TLS) log('WARNING: TLS certificate verification to Headscale is disabled');
 });

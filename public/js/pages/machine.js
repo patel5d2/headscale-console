@@ -52,6 +52,7 @@ export async function render(ctx, { id }, root) {
             owner.tagged ? h('span', icon('tag', 12, 'faint'), ' ', nodeTags(n).join(', ')) : h('span', owner.label)),
           h('div', { class: 'badges' }, nodeBadges(n)))),
       h('div', { class: 'page-actions' },
+        ctx.config.browserSsh ? button('SSH', { icon: 'terminal', onClick: () => ctx.navigate(`#/ssh/${n.id}`) }) : null,
         button('Edit name', { icon: 'edit', onClick: () => renameNode(ctx, n, after) }),
         moreButton(() => nodeMenuItems(ctx, n, () => { ctx.invalidate(); load(); }, { includeView: false }))));
 

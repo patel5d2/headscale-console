@@ -251,7 +251,8 @@ export function nodeMenuItems(ctx, n, after, { includeView = true } = {}) {
   const ri = routeInfo(n);
   return [
     includeView ? { label: 'View machine details', icon: 'eye', onClick: () => ctx.navigate(`#/machines/${n.id}`) } : null,
-    includeView ? { divider: true } : null,
+    ctx.config.browserSsh ? { label: 'SSH…', icon: 'terminal', onClick: () => ctx.navigate(`#/ssh/${n.id}`) } : null,
+    includeView || ctx.config.browserSsh ? { divider: true } : null,
     { label: 'Edit machine name…', icon: 'edit', onClick: () => renameNode(ctx, n, after) },
     { label: 'Edit route settings…', icon: 'routes', hint: ri.pendingSubnets.length || ri.exitPending ? 'Pending' : null, onClick: () => editRoutes(ctx, n, after) },
     { label: 'Edit ACL tags…', icon: 'tag', onClick: () => editTags(ctx, n, after) },

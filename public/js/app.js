@@ -10,6 +10,7 @@ import * as users from './pages/users.js';
 import * as acls from './pages/acls.js';
 import * as dns from './pages/dns.js';
 import * as logs from './pages/logs.js';
+import * as ssh from './pages/ssh.js';
 import * as settings from './pages/settings.js';
 
 const root = document.getElementById('app');
@@ -104,6 +105,7 @@ const ROUTES = [
   { re: /^\/acls$/, page: acls, nav: 'acls' },
   { re: /^\/dns$/, page: dns, nav: 'dns' },
   { re: /^\/logs$/, page: logs, nav: 'logs' },
+  { re: /^\/ssh\/([^/]+)$/, page: ssh, nav: 'machines', params: ['id'] },
   { re: /^\/settings(?:\/([a-z-]+))?$/, page: settings, nav: 'settings', params: ['section'] },
 ];
 

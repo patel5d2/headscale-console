@@ -65,6 +65,7 @@ All settings are environment variables; none are required.
 | `PROXY_TIMEOUT_MS` | `20000` | Upstream request timeout. |
 | `HOST_ACTIONS` | `false` | Enables the **Logs** page and **one-click Headscale updates** when the console runs on the Headscale VM. Requires `HEADSCALE_URL`. See below. |
 | `HEADSCALE_UNIT` | `headscale` | systemd unit whose journal the Logs page reads. |
+| `BROWSER_SSH` | on | Set `false` to turn off Browser SSH. It's only ever on when `HEADSCALE_URL` is set and the SSH client is built. |
 
 ### Same Docker host as Headscale
 
@@ -106,9 +107,10 @@ networks:
 | Disable / enable key expiry, expire key | ✅ | Plus "set expiry date" (1 day … 1 year or a custom date). |
 | Remove machine | ✅ | |
 | Add device | ✅ | Generates an auth key with ready-to-paste Linux/macOS/Windows/Docker commands, or registers a device from its login URL. |
+| **Browser SSH** | ✅ | *SSH* on any machine opens a terminal in the browser over Tailscale SSH, connecting as a Headscale user you pick. See below. |
 | **Routes** overview | ✅ | All subnet routes and exit nodes, primary/standby (HA) status, approve in one click, "Awaiting approval" view, nav badge with pending count. |
 | **Users** | ✅ | Create, rename, delete (offers to remove their machines first), machine counts, last active, add device / auth key for a user. |
-| **Access controls** | ✅ | HuJSON editor with syntax highlighting, line numbers and live syntax checking; server-side validation; templates; **Add rules** (prebuilt snippets: admins, own devices, exit nodes, web/DNS services, SSH, ping, auto-approvers); Format; import/export; Ctrl+S to save; *Preview rules* (filter by user or tag) and a *Tags* view. |
+| **Access controls** | ✅ | HuJSON editor with syntax highlighting, line numbers and live syntax checking; server-side validation; templates; **Add rules** (prebuilt snippets: admins, own devices, exit nodes, web/DNS services, SSH, ping, auto-approvers); Format; import/export; Ctrl+S to save; *Preview rules* (filter by user or tag), a *Tags* view and a *Changes* diff against the saved policy. |
 | **Logs** | ✅ host actions | Headscale's journald log with error/warning counts, similar messages grouped into *Top issues*, level filter, search and download. |
 | **Updates** | ✅ | *Settings → Updates* compares your version with the latest stable release. With host actions: one-click update with checksum verification, database backup and automatic rollback. Otherwise: copy-paste commands for .deb and Docker. |
 | **DNS** | ✅ / config | MagicDNS names for every machine with copy buttons. Nameservers, split DNS and extra records are configured in Headscale's `config.yaml` (not its API) — the page shows a ready-made snippet. |
@@ -137,6 +139,26 @@ Browser ──(same origin)──> Headscale Console (server.js) ──> Headsca
 - The API key lives only in your browser — `localStorage` if you tick "Remember me", otherwise just the current tab — and is sent with each request. The server never stores or logs it.
 - **An API key is full admin access.** Put the console somewhere only you can reach (your LAN or tailnet), or behind a reverse proxy with its own auth. Set `HEADSCALE_URL` so the proxy can't be pointed at other hosts.
 - Strict security headers (CSP with no inline scripts, `frame-ancestors 'none'`, `nosniff`, no referrer). The container runs as a non-root user with a read-only filesystem and all capabilities dropped.
+
+### Browser SSH
+
+The browser runs a Tailscale client compiled to WebAssembly. It's Tailscale's `tsconnect`, as packaged by [Headplane](https://github.com/tale/headplane) (MIT), and the terminal is [xterm.js](https://xtermjs.org). For each session, the client joins your tailnet as a temporary machine (`hsconsole-ssh-…`) owned by the Headscale user you pick, and opens a Tailscale SSH session.
+
+How a session is handled:
+
+- **Short-lived key:** the console creates a single-use, ephemeral auth key that expires after 5 minutes.
+- **Cleanup:** the temporary machine is removed when you close or reload the page. Any left over are removed the next time you connect.
+- **Control traffic:** goes through the console's own server (`/key`, `/ts2021`), and only to `HEADSCALE_URL`. Headscale needs no CORS changes.
+- **No log uploads:** the client is built with Tailscale's log uploading compiled out, so nothing is sent to `log.tailscale.io`.
+
+Requirements:
+
+- `HEADSCALE_URL` set, and Headscale 0.29.2 or newer.
+- On each target machine: `sudo tailscale set --ssh`. A regular SSH server isn't used.
+- `ssh` rules in your policy that let the chosen user log in. *Access controls → Add rules → SSH into your own devices* is a good start.
+- A reverse proxy in front of the console must forward WebSocket upgrades (Caddy does by default), and the console must be served at the root of its domain.
+
+The default Docker build compiles the client in a Go build stage, which takes a few minutes and needs about 4 GB of free Docker disk space. To skip it, run `docker build --target app .`. Without Docker, run `scripts/build-ssh.sh` once (needs Go and git).
 
 ### Logs and one-click updates (host actions)
 
@@ -187,7 +209,9 @@ public/js/ui.js           DOM helpers: modals, menus, toasts, toggles, chips…
 public/js/util.js         time/format helpers, HuJSON parser, storage
 public/js/pages/*.js      machines, machine, routes, users, acls, dns, settings, login
 Dockerfile · docker-compose.yml · deploy/ (systemd units, VM installer, root update helper)
-tests/check.mjs           self-check for policy merging, log parsing, join commands (npm test)
+tests/check.mjs           self-check for policy merging, log parsing, diffs, join commands (npm test)
+scripts/build-ssh.sh      builds the Browser SSH client into public/ssh/ (pinned Headplane commit)
+public/vendor/xterm/      xterm.js 5.5.0 + fit addon (MIT), vendored
 ```
 
 ## Troubleshooting

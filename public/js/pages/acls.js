@@ -1,5 +1,5 @@
 import { h, put, icon, button, badge, callout, clear, toast, tabs, spinner, errorState, confirmDialog, modal } from '../ui.js';
-import { parseHuJSON, hasComments, relTime, download, nodeTags, userLabel } from '../util.js';
+import { parseHuJSON, hasComments, relTime, download, nodeTags, userLabel, lineDiff } from '../util.js';
 import { TEMPLATES, SNIPPETS, mergePolicy } from './policy-library.js';
 
 // ------------------------------------------------------------- highlighter --
@@ -290,6 +290,7 @@ export async function render(ctx, _params, root) {
       { id: 'editor', label: 'Policy file', icon: 'code' },
       { id: 'preview', label: 'Preview rules', icon: 'eye' },
       { id: 'tags', label: 'Tags', icon: 'tag' },
+      { id: 'changes', label: 'Changes', icon: 'file' },
     ], view, (v) => { view = v; draw(); }));
     clear(content);
     if (view === 'editor') {
@@ -301,6 +302,8 @@ export async function render(ctx, _params, root) {
           editor.el),
         h('p', { class: 'help mt-2' }, 'HuJSON: comments and trailing commas are allowed. Press ', h('kbd', 'Ctrl'), '+', h('kbd', 'S'), ' to save.'));
       setStatus();
+    } else if (view === 'changes') {
+      content.appendChild(changesView(saved, editor.value));
     } else if (view === 'preview') {
       content.appendChild(preview(ctx, editor.value));
     } else {
@@ -428,6 +431,25 @@ function preview(ctx, text) {
     h('div', { class: 'toolbar' }, h('label', { class: 'inline-label' }, 'Show rules for', sel),
       h('span', { class: 'muted small' }, 'Preview of the policy in the editor (including unsaved changes).')),
     body);
+}
+
+// Unsaved edits as a diff against the saved policy, with 3 lines of context.
+function changesView(saved, current) {
+  if (saved === current) return callout('info', 'No changes', 'The editor matches the saved policy.');
+  const d = lineDiff(saved, current);
+  if (!d) return callout('info', 'Too large to compare here', 'Download the policy to compare it locally.');
+  const near = (k) => d.slice(Math.max(0, k - 3), k + 4).some((x) => x.op !== ' ');
+  const rows = [];
+  let gap = false;
+  d.forEach((r, k) => {
+    if (!near(k)) { if (!gap) rows.push(h('div', { class: 'diff-gap' }, '⋯')); gap = true; return; }
+    gap = false;
+    rows.push(h('div', { class: `diff-line diff-${{ '+': 'add', '-': 'del', ' ': 'ctx' }[r.op]}` }, `${r.op} ${r.line}`));
+  });
+  const count = (op) => d.filter((r) => r.op === op).length;
+  return h('div', { class: 'stack' },
+    h('p', { class: 'help' }, `${count('+')} lines added and ${count('-')} removed, compared with the saved policy. Nothing is applied until you save.`),
+    h('div', { class: 'diff' }, rows));
 }
 
 function stat(label, n) {

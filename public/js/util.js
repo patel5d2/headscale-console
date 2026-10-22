@@ -269,6 +269,32 @@ export function hostOf(url) {
   try { return new URL(url).host; } catch { return url; }
 }
 
+// Line diff of a → b as [{ op: ' ' | '-' | '+', line }], via longest common subsequence.
+// ponytail: O(n·m) memory; returns null past ~4M cells (Myers' algorithm if that ever matters).
+export function lineDiff(a, b) {
+  const x = a.split('\n');
+  const y = b.split('\n');
+  const n = x.length;
+  const m = y.length;
+  if (n * m > 4e6) return null;
+  const L = new Uint32Array((n + 1) * (m + 1)); // L[i*(m+1)+j] = LCS length of x[i..], y[j..]
+  for (let i = n - 1; i >= 0; i--) {
+    for (let j = m - 1; j >= 0; j--) {
+      L[i * (m + 1) + j] = x[i] === y[j] ? L[(i + 1) * (m + 1) + j + 1] + 1 : Math.max(L[(i + 1) * (m + 1) + j], L[i * (m + 1) + j + 1]);
+    }
+  }
+  const out = [];
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (x[i] === y[j]) { out.push({ op: ' ', line: x[i] }); i++; j++; } else if (L[(i + 1) * (m + 1) + j] >= L[i * (m + 1) + j + 1]) out.push({ op: '-', line: x[i++] });
+    else out.push({ op: '+', line: y[j++] });
+  }
+  while (i < n) out.push({ op: '-', line: x[i++] });
+  while (j < m) out.push({ op: '+', line: y[j++] });
+  return out;
+}
+
 // ------------------------------------------------------------------ theme --
 export function applyTheme(t) {
   const mode = t || store.get('theme', 'system');
