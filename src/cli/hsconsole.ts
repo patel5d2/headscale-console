@@ -214,6 +214,8 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv, io: Io): Promi
       case 'key':
       case 'join': {
         if (cmd === 'key' && args[0] !== 'add') throw new UsageError('Use "key add".');
+        const os = (o.os || 'linux') as JoinOS;
+        if (cmd === 'join' && !['linux', 'mac', 'win', 'docker', 'compose'].includes(os)) throw new UsageError('--os must be linux, mac, win, docker or compose.');
         const tags = splitList(o.tags).map((t) => (t.startsWith('tag:') ? t : `tag:${t}`));
         const user = o.user ? await findUser(o.user) : null;
         if (!user && !tags.length) throw new UsageError('Give --user or --tags (a key without a user needs a tag).');
@@ -225,8 +227,6 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv, io: Io): Promi
           aclTags: tags,
         });
         if (cmd === 'key') { print(k.key, k); return 0; }
-        const os = (o.os || 'linux') as JoinOS;
-        if (!['linux', 'mac', 'win', 'docker', 'compose'].includes(os)) throw new UsageError('--os must be linux, mac, win, docker or compose.');
         print(joinCommand(os, url, k.key, tags, { acceptRoutes: true }), { key: k.key, command: joinCommand(os, url, k.key, tags, { acceptRoutes: true }) });
         return 0;
       }
@@ -266,7 +266,10 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv, io: Io): Promi
         const proto = (o.proto || 'tcp') as Proto;
         if (!['tcp', 'udp', 'icmp'].includes(proto)) throw new UsageError('--proto must be tcp, udp or icmp.');
         const net = checkAccess(parsed.value || {}, machineOf(a), machineOf(b), port, proto);
-        const ssh = checkSsh(parsed.value || {}, machineOf(a), machineOf(b), o['ssh-user'] || 'root');
+        const sshNetwork = checkAccess(parsed.value || {}, machineOf(a), machineOf(b), 22, 'tcp');
+        const ssh = sshNetwork.allowed
+          ? checkSsh(parsed.value || {}, machineOf(a), machineOf(b), o['ssh-user'] || 'root')
+          : { allowed: false, reason: 'Network policy blocks TCP port 22.' };
         print([
           `${nodeName(a)} → ${nodeName(b)} ${proto}${proto === 'icmp' ? '' : `/${port}`}: ${net.allowed ? 'ALLOWED' : 'BLOCKED'} — ${net.reason}`,
           `SSH as ${o['ssh-user'] || 'root'}: ${ssh.allowed ? 'ALLOWED' : 'NOT ALLOWED'} — ${ssh.reason}`,

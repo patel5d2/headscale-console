@@ -65,7 +65,8 @@ export function summarize(body: Buffer, query: URLSearchParams): Record<string, 
 export function record(entry: AuditEntry): void {
   if (!AUDIT_ENABLED) return;
   try {
-    if (fs.existsSync(AUDIT_FILE) && fs.statSync(AUDIT_FILE).size > AUDIT_MAX_BYTES) // keep one old file fs.renameSync(AUDIT_FILE, AUDIT_FILE + '.1');
+    // Past the size limit, the current log becomes audit.jsonl.1 (one old file is kept).
+    if (fs.existsSync(AUDIT_FILE) && fs.statSync(AUDIT_FILE).size > AUDIT_MAX_BYTES) fs.renameSync(AUDIT_FILE, AUDIT_FILE + '.1');
     fs.appendFileSync(AUDIT_FILE, JSON.stringify(entry) + '\n', { mode: 0o600 });
   } catch (e) {
     log(`Could not write the audit log: ${(e as Error).message}`);

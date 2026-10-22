@@ -108,7 +108,7 @@ export function startMockHeadscale(port: number): Promise<{ state: () => State; 
     if (p === '/__mock/set') { Object.assign(st, await readBody(req)); return send(res, 200, {}); }
     if (p === '/__mock/fail') {
       const b = await readBody(req);
-      st.fail.push({ method: String(b.method || '*'), path: new RegExp(String(b.path)), status: Number(b.status || 500), message: String(b.message || 'injected failure'), times: Number(b.times || 1) });
+      st.fail.push({ method: String(b.method || '*'), path: new RegExp(String(b.path)), status: Number(b.status ?? 500), message: String(b.message || 'injected failure'), times: Number(b.times || 1) });
       return send(res, 200, {});
     }
     if (p === '/__mock/releases') {
@@ -250,7 +250,9 @@ export function startMockHeadscale(port: number): Promise<{ state: () => State; 
     if (r === 'preauthkey' && method === 'DELETE') { st.keys = st.keys.filter((x) => x.id !== q.get('id')); return send(res, 200, {}); }
 
     // API keys
-    if (r === 'apikey' && method === 'GET') return send(res, 200, { apiKeys: st.apiKeys.map(({ secret: _s, ...k }) => ({ ...k, prefix: `${k.prefix}***` })) });
+    // Listed like Headscale 0.29: new-format keys as "hskey-api-<prefix>-***", legacy ones as "<prefix>***".
+    const listed = (k: ApiKey & { secret: string }): string => (k.secret.startsWith('hskey-api-') ? `hskey-api-${k.prefix}-***` : `${k.prefix}***`);
+    if (r === 'apikey' && method === 'GET') return send(res, 200, { apiKeys: st.apiKeys.map((k) => ({ id: k.id, prefix: listed(k), expiration: k.expiration, createdAt: k.createdAt, lastSeen: k.lastSeen })) });
     if (r === 'apikey' && method === 'POST') {
       const prefix = `NEWKEY${st.nextId++}`;
       const secret = `hskey-api-${prefix}-${crypto.randomBytes(16).toString('hex')}`;
@@ -265,7 +267,8 @@ export function startMockHeadscale(port: number): Promise<{ state: () => State; 
     }
     if (r.startsWith('apikey/') && method === 'DELETE') {
       const id = q.get('id');
-      st.apiKeys = st.apiKeys.filter((x) => x.id !== id && x.prefix !== decodeURIComponent(r.slice(7)));
+      const pfx = decodeURIComponent(r.slice(7));
+      st.apiKeys = st.apiKeys.filter((x) => x.id !== id && listed(x) !== pfx);
       return send(res, 200, {});
     }
 
@@ -295,12 +298,16 @@ export function startMockHeadscale(port: number): Promise<{ state: () => State; 
     socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
     socket.write(Buffer.from([0x81, 5, ...Buffer.from('hello')]));
     socket.on('error', () => {});
+    socket.on('end', () => socket.end());
   });
 
+  // Upgraded and stalled sockets aren't closed by closeAllConnections(), so track them all.
+  const sockets = new Set<import('node:net').Socket>();
+  server.on('connection', (s) => { sockets.add(s); s.on('close', () => sockets.delete(s)); });
   return new Promise((resolve) => {
     server.listen(port, '127.0.0.1', () => resolve({
       state: () => st,
-      close: () => new Promise((r) => { server.closeAllConnections(); server.close(() => r()); }),
+      close: () => new Promise((r) => { for (const s of sockets) s.destroy(); server.close(() => r()); }),
     }));
   });
 }

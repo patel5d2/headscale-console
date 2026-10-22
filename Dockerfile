@@ -1,36 +1,44 @@
-# Headscale Console — tiny, dependency-free image
+# syntax=docker/dockerfile:1
+# Compile on the builder's native architecture: the output is portable JS/WASM.
+FROM --platform=$BUILDPLATFORM node:22-alpine AS build
+WORKDIR /build
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY tsconfig*.json ./
+COPY src ./src
+COPY public ./public
+RUN npm run build
 
-# Stage 1: the Browser SSH client (Tailscale compiled to WebAssembly). If
-# scripts/build-ssh.sh already put it in public/ssh/, that copy ships with public/
-# below and nothing is compiled here; otherwise it's built (needs ~4 GB of Docker disk).
-# Skip SSH entirely with: docker build --target app .
-FROM golang:1.27-alpine AS ssh
+# Reuse a locally built Browser SSH client when present. CI builds the pinned
+# Headplane source using scripts/build-ssh.sh. --target app omits Browser SSH.
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS ssh
 RUN apk add --no-cache bash git patch
-# The [h] glob lets the build go on when public/ssh doesn't exist.
 COPY scripts/build-ssh.sh public/ss[h] /stage/
-RUN if [ -f /stage/hp_ssh.wasm ]; then mkdir -p /out; else bash /stage/build-ssh.sh /out; fi
+RUN if [ -s /stage/hp_ssh.wasm ] && [ -s /stage/wasm_exec.js ]; then \
+      mkdir -p /out && cp /stage/hp_ssh.wasm* /stage/wasm_exec.js /stage/LICENSE.headplane /out/; \
+    else bash /stage/build-ssh.sh /out; fi
 
 FROM node:22-alpine AS app
-
 LABEL org.opencontainers.image.title="headscale-console" \
-      org.opencontainers.image.description="Tailscale-style web admin console for Headscale"
-
-ENV NODE_ENV=production \
-    PORT=8080 \
-    HOST=0.0.0.0
-
+      org.opencontainers.image.description="Tailscale-style web admin console for Headscale" \
+      org.opencontainers.image.source="https://github.com/patel5d2/headscale-console" \
+      org.opencontainers.image.licenses="MIT"
+ENV NODE_ENV=production PORT=8080 HOST=0.0.0.0 DATA_DIR=/data
 WORKDIR /app
-COPY --chown=node:node package.json server.js host.js ./
-COPY --chown=node:node public ./public
-
+COPY --from=build /build/package.json ./
+COPY --from=build /build/dist ./dist
+COPY --from=build /build/public ./public
+# The runtime has no npm dependencies. Keep code read-only to the service user.
+RUN rm -rf public/ssh && \
+    chmod 0755 dist/cli/hsconsole.js && \
+    ln -s /app/dist/cli/hsconsole.js /usr/local/bin/hsconsole && \
+    mkdir -p /data && chown node:node /data && chmod 0700 /data
+VOLUME ["/data"]
 USER node
 EXPOSE 8080
-
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget -qO- "http://127.0.0.1:${PORT}/healthz" >/dev/null || exit 1
+CMD ["node", "dist/server/server.js"]
 
-CMD ["node", "server.js"]
-
-# Default target: the app plus the Browser SSH client.
-FROM app
-COPY --from=ssh --chown=node:node /out ./public/ssh
+FROM app AS full
+COPY --from=ssh /out ./public/ssh

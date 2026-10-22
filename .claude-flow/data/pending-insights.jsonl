@@ -53,3 +53,4 @@
 {"type":"edit","file":"/Users/dharminpatel/Downloads/headscale-console/tests/support/fixtures.ts","success":true,"timestamp":1792701005135,"sessionId":null}
 {"type":"edit","file":"/Users/dharminpatel/Downloads/headscale-console/playwright.config.ts","success":true,"timestamp":1792701005441,"sessionId":null}
 {"type":"edit","file":"/Users/dharminpatel/Downloads/headscale-console/tests/e2e/login.spec.ts","success":true,"timestamp":1792701059772,"sessionId":null}
+{"type":"edit","file":"/Users/dharminpatel/Downloads/headscale-console/tests/e2e/machines.spec.ts","success":true,"timestamp":1792702396507,"sessionId":null}

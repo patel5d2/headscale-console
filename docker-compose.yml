@@ -11,14 +11,17 @@ services:
       # Recommended: lock the console to your Headscale server. The login page
       # then only asks for the API key, and the proxy can't be pointed elsewhere.
       # Required for Browser SSH.
-      HEADSCALE_URL: "https://hs.dharmintech.org"
+      HEADSCALE_URL: "${HEADSCALE_URL:-https://headscale.example.com}"
 
       # If HEADSCALE_URL is not set, optionally restrict which hosts can be entered.
       # ALLOWED_HEADSCALE_HOSTS: "headscale.example.com,192.168.0.50"
 
       # Accept a self-signed certificate on the Headscale server.
       # HEADSCALE_INSECURE_TLS: "true"
-      TZ: "America/New_York"
+      DATA_DIR: /data
+      TZ: "${TZ:-UTC}"
+    volumes:
+      - console-data:/data
     read_only: true
     cap_drop: [ALL]
     security_opt:
@@ -31,3 +34,6 @@ services:
 # networks:
 #   headscale:
 #     external: true
+
+volumes:
+  console-data:

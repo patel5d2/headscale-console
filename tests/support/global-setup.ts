@@ -48,7 +48,7 @@ function envFor(name: ServerName): NodeJS.ProcessEnv {
       return {
         ...base, HEADSCALE_URL: MOCK, HOST_ACTIONS: 'true', HEADSCALE_UNIT: 'headscale', PUBLIC_DIR: testPublicDir(dir),
         DATA_DIR: path.join(dir, 'data'), STATE_DIRECTORY: path.join(dir, 'state'), UPDATE_STATUS_DIR: path.join(dir, 'update-status'),
-        HEADSCALE_RELEASES_URL: `${MOCK}/__mock/releases`, RELEASES_CACHE_MS: '1', AUDIT_MAX_BYTES: '20000', POLICY_HISTORY_MAX: '5',
+        HEADSCALE_RELEASES_URL: `${MOCK}/__mock/releases`, RELEASES_CACHE_MS: '1', AUDIT_MAX_BYTES: '8000', POLICY_HISTORY_MAX: '5',
         PATH: `${bin}:${process.env.PATH}`,
       };
     case 'open':

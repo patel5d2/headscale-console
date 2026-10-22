@@ -486,10 +486,14 @@ export function chipInput(initial: string[] = [], { placeholder = 'Add…', norm
       h('button', { type: 'button', 'aria-label': `Remove ${v}`, onclick: () => { values.splice(i, 1); render(); } }, icon('x', 12)))));
   };
   const add = (): boolean => {
-    for (let p of input.value.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean)) {
-      p = normalize(p);
+    const pending = input.value.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean).map(normalize);
+    // Validate the whole entry before changing the chips. A rejected later token
+    // must not leave an earlier token hidden in the values sent to Headscale.
+    for (const p of pending) {
       const e = validate(p);
       if (e) { err.textContent = e; return false; }
+    }
+    for (const p of pending) {
       if (!values.includes(p)) values.push(p);
     }
     input.value = '';

@@ -112,5 +112,5 @@ export function joinCommand(os: JoinOS, url: string, key: string | undefined, ta
 
 /** A runnable script for download: stops at the first failing step. */
 export function joinScript(os: 'mac' | 'linux', url: string, key: string | undefined, tags: string[] = [], o: JoinOptions = {}): string {
-  return `#!/bin/sh\n# Joins this device to ${url}\nset -eu\n${joinCommand(os, url, key, tags, o)}\n`;
+  return `#!/bin/sh\n# Joins this device to ${url.replace(/[\r\n]+/g, ' ')}\nset -eu\n${joinCommand(os, url, key, tags, o)}\n`;
 }

@@ -126,6 +126,7 @@ export function cmpVersion(a: string, b: string): number {
 
 export function stripHuJSON(src: string): string {
   let out = '';
+  const commas = new Set<number>();
   let i = 0;
   let inStr = false;
   while (i < src.length) {
@@ -149,10 +150,13 @@ export function stripHuJSON(src: string): string {
       out += '  '; i += 2;
       continue;
     }
+    if (c === ',') commas.add(out.length);
     out += c;
     i++;
   }
-  return out.replace(/,(\s*[}\]])/g, ' $1'); // drop trailing commas before } or ]
+  // A comma followed by a closing bracket can also occur inside a JSON string.
+  // Only remove commas that the scanner encountered outside strings/comments.
+  return out.replace(/,(\s*[}\]])/g, (match: string, closing: string, offset: number) => commas.has(offset) ? ` ${closing}` : match);
 }
 
 export type Parsed<T = unknown> = { ok: true; value: T } | { ok: false; error: string; line: number | null; col: number | null };
