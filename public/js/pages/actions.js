@@ -360,7 +360,7 @@ export function addDevice(ctx, after, { initialTab = 'key', userId } = {}) {
     });
     return h('div', { class: 'stack' },
       h('p', { class: 'help' }, 'On the device, run the command below. It prints a login URL — paste that URL here to approve the device.'),
-      codeBlock(`tailscale up --login-server ${url}`),
+      commandBuilder(url),
       h('label', { class: 'field' }, h('span', { class: 'field-label' }, 'Registration URL or auth ID'), input),
       h('label', { class: 'field' }, h('span', { class: 'field-label' }, 'Assign to user'), owner),
       h('div', go), out);
@@ -371,21 +371,76 @@ export function addDevice(ctx, after, { initialTab = 'key', userId } = {}) {
   return m;
 }
 
-export function keyResult(url, key, tags = []) {
-  const os = { linux: 'Linux', mac: 'macOS', win: 'Windows', docker: 'Docker' };
-  const cmds = {
-    linux: `curl -fsSL https://tailscale.com/install.sh | sh\nsudo tailscale up --login-server ${url} --authkey ${key}${tags.length ? ` --advertise-tags=${tags.join(',')}` : ''}`,
-    mac: `tailscale up --login-server ${url} --authkey ${key}${tags.length ? ` --advertise-tags=${tags.join(',')}` : ''}`,
-    win: `tailscale up --login-server ${url} --authkey ${key}${tags.length ? ` --advertise-tags=${tags.join(',')}` : ''}`,
-    docker: `docker run -d --name tailscaled --cap-add NET_ADMIN --device /dev/net/tun \\\n  -e TS_AUTHKEY=${key} \\\n  -e TS_EXTRA_ARGS="--login-server ${url}" \\\n  -e TS_STATE_DIR=/var/lib/tailscale -v tailscale-state:/var/lib/tailscale \\\n  tailscale/tailscale:latest`,
-  };
+const OS_LABELS = { mac: 'macOS', linux: 'Linux', win: 'Windows', docker: 'Docker' };
+// The macOS app doesn't put `tailscale` on PATH, so call the bundled CLI directly.
+const TS_CLI = { mac: 'sudo /Applications/Tailscale.app/Contents/MacOS/Tailscale', linux: 'sudo tailscale', win: 'tailscale' };
+const defaultOS = () => (/Mac/i.test(navigator.platform) ? 'mac' : /Win/i.test(navigator.platform) ? 'win' : 'linux');
+
+// Flags shared by every platform; `o` holds the toggles from the key result UI.
+function upFlags(url, key, tags, o) {
+  return [
+    key && `--auth-key=${key}`,
+    `--login-server=${url}`,
+    o.acceptRoutes && '--accept-routes',
+    o.acceptDns === false && '--accept-dns=false',
+    o.exitNode && '--advertise-exit-node',
+    o.routes?.length && `--advertise-routes=${o.routes.join(',')}`,
+    tags.length && `--advertise-tags=${tags.join(',')}`,
+    o.hostname && `--hostname=${o.hostname}`,
+    o.ssh && '--ssh',
+    o.reset && '--reset',
+  ].filter(Boolean);
+}
+
+export function upCommand(os, url, key, tags = [], o = {}) {
+  const flags = upFlags(url, key, tags, o);
+  if (os === 'docker') {
+    const extra = flags.filter((f) => !f.startsWith('--auth-key'));
+    return `docker run -d --name tailscaled --cap-add NET_ADMIN --device /dev/net/tun \\\n  ${key ? `-e TS_AUTHKEY=${key} \\\n  ` : ''}-e TS_EXTRA_ARGS="${extra.join(' ')}" \\\n  -e TS_STATE_DIR=/var/lib/tailscale -v tailscale-state:/var/lib/tailscale \\\n  tailscale/tailscale:latest`;
+  }
+  if (os === 'win') flags.push('--unattended');
+  const up = `${TS_CLI[os]} up ${flags.join(' ')}`;
+  return os === 'linux' ? `curl -fsSL https://tailscale.com/install.sh | sh\n${up}` : up;
+}
+
+// OS tabs + option toggles that rebuild the `tailscale up` command live.
+export function commandBuilder(url, key, tags = []) {
+  let os = defaultOS();
+  const o = { acceptRoutes: true, acceptDns: true };
   const box = h('div');
-  const show = (id) => clear(box).appendChild(codeBlock(cmds[id]));
-  show('linux');
+  const show = () => clear(box).appendChild(codeBlock(upCommand(os, url, key, tags, o)));
+  const check = (prop, label, help) => {
+    const cb = h('input', { type: 'checkbox', checked: !!o[prop], onchange: () => { o[prop] = cb.checked; show(); } });
+    return h('label', { class: 'check' }, cb, h('span', h('span', { class: 'check-label' }, label), h('span', { class: 'help' }, help)));
+  };
+  const text = (prop, placeholder, parse) => {
+    const inp = h('input', { class: 'input mono', placeholder, spellcheck: 'false' });
+    inp.addEventListener('input', () => { o[prop] = parse(inp.value.trim()); show(); });
+    return inp;
+  };
+  show();
+  return h('div', { class: 'stack' },
+    tabs(Object.entries(OS_LABELS).map(([id, label]) => ({ id, label })), os, (id) => { os = id; show(); }),
+    box,
+    h('details', h('summary', { class: 'small' }, 'Command options'),
+      h('div', { class: 'stack pad-y' },
+        h('div', { class: 'grid-2' },
+          check('acceptRoutes', 'Accept routes', 'Use subnet routes advertised by other devices.'),
+          check('acceptDns', 'Accept DNS', 'Use MagicDNS and the tailnet\'s DNS settings.'),
+          check('exitNode', 'Advertise exit node', 'Offer this device as an exit node (approve it afterwards).'),
+          check('ssh', 'Tailscale SSH', 'Run the SSH server (Linux; not the macOS App Store app).'),
+          check('reset', 'Reset settings', 'Clear flags from a previous tailscale up on this device.')),
+        h('div', { class: 'grid-2' },
+          h('label', { class: 'field' }, h('span', { class: 'field-label' }, 'Hostname', h('span', { class: 'muted' }, ' (optional)')),
+            text('hostname', 'my-laptop', (s) => s.toLowerCase().replace(/[^a-z0-9-]/g, ''))),
+          h('label', { class: 'field' }, h('span', { class: 'field-label' }, 'Advertise routes', h('span', { class: 'muted' }, ' (optional)')),
+            text('routes', '192.168.1.0/24, 10.0.0.0/8', (s) => s.split(/[\s,]+/).filter(validCIDR)))))));
+}
+
+export function keyResult(url, key, tags = []) {
   return h('div', { class: 'stack key-result' },
     callout('success', 'Auth key created', 'Copy it now — for security it won\'t be shown in full again.'),
     h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'Auth key'), codeBlock(key, { wrap: true })),
-    tabs(Object.entries(os).map(([id, label]) => ({ id, label })), 'linux', show),
-    box);
+    commandBuilder(url, key, tags));
 }
 
