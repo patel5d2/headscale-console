@@ -99,6 +99,7 @@ networks:
 
 | Tailscale console | Headscale Console | Notes |
 |---|---|---|
+| **Overview** | ✅ | Tailnet stats and a *Needs attention* list: routes awaiting approval, expired or expiring machine keys, machines unseen for 30+ days, tags missing from `tagOwners`, this console's API key expiring, Headscale updates. |
 | **Machines** list, search, filters, sort | ✅ | Filter by status, owner, tag, exit node, subnet router, pending approval, expiry disabled, ephemeral. Auto-refreshes every 15 s. |
 | Machine details page | ✅ | Owner, addresses, MagicDNS name, keys, created/last seen, registration method, auth key used. |
 | Edit machine name | ✅ | Validates MagicDNS label rules. |
@@ -106,15 +107,15 @@ networks:
 | Edit ACL tags | ✅ | Suggests tags from `tagOwners`. |
 | Disable / enable key expiry, expire key | ✅ | Plus "set expiry date" (1 day … 1 year or a custom date). |
 | Remove machine | ✅ | |
-| Add device | ✅ | Generates an auth key with ready-to-paste Linux/macOS/Windows/Docker commands, or registers a device from its login URL. |
+| Add device | ✅ | Generates an auth key with ready-to-paste Linux/macOS/Windows/Docker commands (accept routes/DNS, exit node, shields up, operator, SSH, QR, hostname, advertised routes…), or registers a device from its login URL. |
 | **Browser SSH** | ✅ | *SSH* on any machine opens a terminal in the browser over Tailscale SSH, connecting as a Headscale user you pick. See below. |
 | **Routes** overview | ✅ | All subnet routes and exit nodes, primary/standby (HA) status, approve in one click, "Awaiting approval" view, nav badge with pending count. |
 | **Users** | ✅ | Create, rename, delete (offers to remove their machines first), machine counts, last active, add device / auth key for a user. |
-| **Access controls** | ✅ | HuJSON editor with syntax highlighting, line numbers and live syntax checking; server-side validation; templates; **Add rules** (prebuilt snippets: admins, own devices, exit nodes, web/DNS services, SSH, ping, auto-approvers); Format; import/export; Ctrl+S to save; *Preview rules* (filter by user or tag), a *Tags* view and a *Changes* diff against the saved policy. |
+| **Access controls** | ✅ | **Visual editor** for access rules, SSH rules, groups, tag owners and hosts, with suggestions for every user, group, tag and host. **Access checker**: "can machine A reach machine B on port N, and SSH in as user X?", naming the rule that decides. HuJSON editor with syntax highlighting, line numbers and live syntax checking; server-side validation; templates; **Add rules** (prebuilt snippets: admins, own devices, exit nodes, web/DNS services, SSH, ping, auto-approvers); Format; import/export; Ctrl+S to save; *Preview rules* (filter by user or tag), a *Tags* view and a *Changes* diff against the saved policy. |
 | **Logs** | ✅ host actions | Headscale's journald log with error/warning counts, similar messages grouped into *Top issues*, level filter, search and download. |
 | **Updates** | ✅ | *Settings → Updates* compares your version with the latest stable release. With host actions: one-click update with checksum verification, database backup and automatic rollback. Otherwise: copy-paste commands for .deb and Docker. |
 | **DNS** | ✅ / config | MagicDNS names for every machine with copy buttons. Nameservers, split DNS and extra records are configured in Headscale's `config.yaml` (not its API) — the page shows a ready-made snippet. |
-| **Settings → Keys** (auth keys) | ✅ | Reusable / ephemeral / tagged / expiry, revoke, delete, Active/Used/Expired tabs. |
+| **Settings → Keys** (auth keys) | ✅ | Reusable / ephemeral / tagged / expiry (presets or an exact date and time), revoke, delete, Active/Used/Expired tabs. |
 | **Settings → API keys** | ✅ | Create (shown once), expire, delete; marks the key used by this session. |
 | **Device approval** | ✅ | Register a device or approve/reject an auth request (e.g. SSH check mode) by its ID. Headscale's API has no list of pending requests. |
 | Server info / health | ✅ | Version, commit, database health, tailnet stats, IP backfill. |
@@ -124,7 +125,7 @@ networks:
 
 ### Keyboard shortcuts
 
-`/` focus search · `g` then `m` Machines · `g r` Routes · `g u` Users · `g a` Access controls · `g d` DNS · `g s` Settings · `g k` Auth keys · `Ctrl/⌘ + S` save policy · `Esc` close dialogs/menus
+`/` focus search · `g` then `o` Overview · `g m` Machines · `g r` Routes · `g u` Users · `g a` Access controls · `g d` DNS · `g s` Settings · `g k` Auth keys · `Ctrl/⌘ + S` save policy · `Esc` close dialogs/menus
 
 ---
 
