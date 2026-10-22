@@ -19,7 +19,7 @@ import fs from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import path from 'node:path';
 import { requireApiKey } from './auth.js';
-import { HEADSCALE_UNIT, HOST_ACTIONS, RELEASES_URL, STATE_DIR, UPDATE_STATUS_DIR } from './config.js';
+import { HEADSCALE_UNIT, HOST_ACTIONS, RELEASES_CACHE_MS, RELEASES_URL, STATE_DIR, UPDATE_STATUS_DIR } from './config.js';
 import { HttpError, log, readJSON, sendJSON } from './http.js';
 
 const VERSION_RE = /^\d{1,3}\.\d{1,3}\.\d{1,3}$/;
@@ -36,7 +36,7 @@ interface UpdateStatus { state: string; from?: string; to?: string; at?: string;
 let cache: { at: number; list: Release[] | null } = { at: 0, list: null };
 
 export async function releases(): Promise<Release[]> {
-  if (cache.list && Date.now() - cache.at < 3600e3) return cache.list;
+  if (cache.list && Date.now() - cache.at < RELEASES_CACHE_MS) return cache.list;
   try {
     const r = await fetch(RELEASES_URL, {
       headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'headscale-console' },

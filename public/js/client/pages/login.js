@@ -6,11 +6,11 @@ export function render(ctx, _params, root) {
     const urlInput = h('input', {
         class: 'input', id: 'hs-url', name: 'url', type: 'url', inputmode: 'url', autocomplete: 'url',
         placeholder: 'https://headscale.example.com', value: locked || lastUrl, spellcheck: 'false',
-        readonly: !!locked, required: true,
+        readonly: !!locked, required: true, 'aria-label': 'Headscale server URL',
     });
     const keyInput = h('input', {
         class: 'input mono', id: 'hs-key', name: 'key', type: 'password', autocomplete: 'off',
-        placeholder: 'hskey-api-…', spellcheck: 'false', required: true,
+        placeholder: 'hskey-api-…', spellcheck: 'false', required: true, 'aria-label': 'API key',
     });
     const reveal = h('button', { type: 'button', class: 'input-addon', 'aria-label': 'Show API key', title: 'Show / hide' }, icon('eye', 16));
     reveal.addEventListener('click', () => { keyInput.type = keyInput.type === 'password' ? 'text' : 'password'; keyInput.focus(); });

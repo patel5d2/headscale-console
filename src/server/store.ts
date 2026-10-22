@@ -15,12 +15,11 @@ import fs from 'node:fs';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import path from 'node:path';
 import { requireApiKey } from './auth.js';
-import { AUDIT_MAX_BYTES, AUDIT_WANTED, DATA_DIR } from './config.js';
+import { AUDIT_MAX_BYTES, AUDIT_WANTED, DATA_DIR, POLICY_HISTORY_MAX } from './config.js';
 import { HttpError, log, sendJSON, upstreamGet } from './http.js';
 
 const AUDIT_FILE = path.join(DATA_DIR, 'audit.jsonl');
 const HISTORY_DIR = path.join(DATA_DIR, 'policy-history');
-const MAX_VERSIONS = 200;
 const ID_RE = /^\d{8}T\d{9}Z-[A-Za-z0-9_-]{1,32}\.hujson$/;
 const SECRET_FIELD = /^(key|apikey|authkey|secret|password|token)$/i;
 
@@ -97,7 +96,7 @@ export function savePolicyVersion(text: string, actor: string): void {
     if (last && fs.readFileSync(path.join(HISTORY_DIR, last), 'utf8') === text) return; // unchanged
     const stamp = new Date().toISOString().replace(/[-:.]/g, '');
     fs.writeFileSync(path.join(HISTORY_DIR, `${stamp}-${actor.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32) || 'unknown'}.hujson`), text, { mode: 0o600 });
-    for (const old of versionIds().slice(0, -MAX_VERSIONS)) fs.unlinkSync(path.join(HISTORY_DIR, old));
+    for (const old of versionIds().slice(0, -POLICY_HISTORY_MAX)) fs.unlinkSync(path.join(HISTORY_DIR, old));
   } catch (e) {
     log(`Could not save the policy version: ${(e as Error).message}`);
   }

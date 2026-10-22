@@ -13,9 +13,7 @@ export function normalizeBase(raw) {
     if (!/^https?:\/\//i.test(s))
         s = 'https://' + s;
     try {
-        const u = new URL(s);
-        if (u.protocol !== 'http:' && u.protocol !== 'https:')
-            return '';
+        const u = new URL(s); // always http(s): the scheme was checked above
         return (u.origin + u.pathname).replace(/\/+$/, '');
     }
     catch {
@@ -40,9 +38,13 @@ export const HEADSCALE_UNIT = /^[\w@][\w@.-]*$/.test(env.HEADSCALE_UNIT || '') ?
 export const STATE_DIR = env.STATE_DIRECTORY || '/var/lib/headscale-console';
 export const UPDATE_STATUS_DIR = env.UPDATE_STATUS_DIR || '/var/lib/headscale-console-update';
 export const RELEASES_URL = env.HEADSCALE_RELEASES_URL || 'https://api.github.com/repos/juanfont/headscale/releases?per_page=30';
+/** How long the release list is reused before GitHub is asked again (default 1 hour). */
+export const RELEASES_CACHE_MS = parseInt(env.RELEASES_CACHE_MS || '', 10) || 3600_000;
 // Audit log + policy history: on with a locked server unless AUDIT_LOG=false.
 export const DATA_DIR = env.DATA_DIR || (env.STATE_DIRECTORY ? env.STATE_DIRECTORY : path.resolve('data'));
 export const AUDIT_WANTED = !!LOCKED_URL && !falsy(env.AUDIT_LOG);
 /** The audit log rotates to audit.jsonl.1 past this size (default 10 MB). */
 export const AUDIT_MAX_BYTES = parseInt(env.AUDIT_MAX_BYTES || '', 10) || 10 * 1024 * 1024;
+/** Policy versions kept in the history (default 200). */
+export const POLICY_HISTORY_MAX = parseInt(env.POLICY_HISTORY_MAX || '', 10) || 200;
 //# sourceMappingURL=config.js.map

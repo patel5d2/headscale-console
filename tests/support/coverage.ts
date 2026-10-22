@@ -19,7 +19,18 @@ export const options: CoverageReportOptions = {
   entryFilter: (entry) => /\/js\/(client|shared)\/|\/dist\/(server|cli|shared)\//.test(entry.url),
   sourceFilter: (p) => /(^|\/)src\//.test(p) && !TYPE_ONLY.some((t) => p.endsWith(t)),
   sourcePath: (p) => p.replace(/^.*?(?=src\/)/, ''),
-  all: { dir: [path.join(ROOT, 'src')], filter: (p: string) => p.endsWith('.ts') && !TYPE_ONLY.some((t) => p.endsWith(t)) },
+  // Files no test loaded still count, at 0%. They're TypeScript, so hand the report the
+  // JavaScript and source map our build already produced for each one.
+  all: {
+    dir: [path.join(ROOT, 'src')],
+    filter: (p: string) => p.endsWith('.ts') && !TYPE_ONLY.some((t) => p.endsWith(t)),
+    transformer: (entry: { url: string; source: string; sourceMap?: unknown }) => {
+      const rel = path.relative(path.join(ROOT, 'src'), new URL(entry.url).pathname).replace(/\.ts$/, '.js');
+      const js = path.join(ROOT, /^(client|shared)\//.test(rel) ? 'public/js' : 'dist', rel);
+      entry.source = fs.readFileSync(js, 'utf8');
+      entry.sourceMap = JSON.parse(fs.readFileSync(`${js}.map`, 'utf8'));
+    },
+  },
   clean: false,
   cleanCache: false,
   logging: 'error',

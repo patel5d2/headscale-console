@@ -18,7 +18,7 @@ import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { requireApiKey } from './auth.js';
-import { HEADSCALE_UNIT, HOST_ACTIONS, RELEASES_URL, STATE_DIR, UPDATE_STATUS_DIR } from './config.js';
+import { HEADSCALE_UNIT, HOST_ACTIONS, RELEASES_CACHE_MS, RELEASES_URL, STATE_DIR, UPDATE_STATUS_DIR } from './config.js';
 import { HttpError, log, readJSON, sendJSON } from './http.js';
 const VERSION_RE = /^\d{1,3}\.\d{1,3}\.\d{1,3}$/;
 const SINCE = { '15m': '-15min', '1h': '-1h', '6h': '-6h', '24h': '-24h', '7d': '-7d' };
@@ -28,7 +28,7 @@ const REQUEST_FILE = path.join(STATE_DIR, 'update-request');
 // ---------------------------------------------------------------- releases --
 let cache = { at: 0, list: null };
 export async function releases() {
-    if (cache.list && Date.now() - cache.at < 3600e3)
+    if (cache.list && Date.now() - cache.at < RELEASES_CACHE_MS)
         return cache.list;
     try {
         const r = await fetch(RELEASES_URL, {

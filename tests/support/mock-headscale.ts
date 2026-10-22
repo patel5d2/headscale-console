@@ -13,7 +13,7 @@ interface State {
   users: User[]; nodes: Node[]; keys: PreAuthKey[]; apiKeys: Array<ApiKey & { secret: string }>;
   policy: string | null; policyUpdatedAt: string; nextId: number;
   fail: Array<{ method: string; path: RegExp; status: number; message: string; times: number }>;
-  releases: unknown[] | null; releasesStatus: number; wsMode: 'accept' | 'refuse';
+  releases: unknown[] | null; releasesStatus: number; wsMode: 'accept' | 'refuse' | 'drop' | 'hang';
   authRequests: Record<string, 'pending' | 'approved' | 'rejected'>;
 }
 
@@ -49,6 +49,8 @@ export function seed(): State {
     apiKeys: [
       { id: '1', prefix: API_PREFIX, secret: API_KEY, expiration: iso(5 * DAY), createdAt: iso(-20 * DAY), lastSeen: iso(-1000) },
       { id: '2', prefix: 'OLDKEY00002', secret: 'hskey-api-OLDKEY00002-zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz', expiration: iso(-DAY), createdAt: iso(-100 * DAY) },
+      { id: '3', prefix: 'legacy01', secret: 'legacy01.0123456789abcdef0123456789', expiration: iso(90 * DAY), createdAt: iso(-200 * DAY) },
+      { id: '4', prefix: 'odd', secret: 'oddkeywithoutanyseparator', expiration: iso(90 * DAY), createdAt: iso(-200 * DAY) },
     ],
     policy: `{
   // Admins reach everything
@@ -119,7 +121,9 @@ export function startMockHeadscale(port: number): Promise<{ state: () => State; 
     const f = st.fail.find((x) => (x.method === '*' || x.method === method) && x.path.test(p));
     if (f) {
       if (--f.times <= 0) st.fail.splice(st.fail.indexOf(f), 1);
-      if (f.status === 0) { req.socket.destroy(); return; } // simulate a dropped connection
+      if (f.status === 0) { req.socket.destroy(); return; } // a dropped connection
+      if (f.status === -1) return; // no answer at all
+      if (f.status === -2) { res.writeHead(200, { 'Content-Type': 'application/json' }); res.write('{"partial":'); return; } // stalls mid-body
       return err(res, f.status, f.message);
     }
 
@@ -150,6 +154,7 @@ export function startMockHeadscale(port: number): Promise<{ state: () => State; 
     const body = method === 'GET' || method === 'DELETE' ? {} : await readBody(req);
 
     if (r === 'health') return send(res, 200, { databaseConnectivity: true });
+    if (r === 'html') { res.writeHead(200, { 'Content-Type': 'text/html' }); res.end('<script>alert(1)</script>'); return; }
 
     // users
     if (r === 'user' && method === 'GET') return send(res, 200, { users: [...st.users, { id: '2147455555', name: 'tagged-devices' }] });
@@ -284,6 +289,8 @@ export function startMockHeadscale(port: number): Promise<{ state: () => State; 
   // Browser SSH's control connection: accept the WebSocket and send one text frame.
   server.on('upgrade', (req, socket) => {
     if (st.wsMode === 'refuse') { socket.end('HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\n\r\n'); return; }
+    if (st.wsMode === 'drop') { socket.destroy(); return; }
+    if (st.wsMode === 'hang') return;
     const accept = crypto.createHash('sha1').update(`${req.headers['sec-websocket-key']}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`).digest('base64');
     socket.write(`HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`);
     socket.write(Buffer.from([0x81, 5, ...Buffer.from('hello')]));

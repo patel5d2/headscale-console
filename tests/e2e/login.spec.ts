@@ -38,7 +38,7 @@ test.describe('login', () => {
     await urlBox.fill('');
     await page.getByRole('button', { name: 'Connect' }).click();
     await expect(page.locator('.login-error')).toContainText('Enter your Headscale server URL.');
-    await urlBox.fill('http://exa mple');
+    await urlBox.fill('http://');
     await page.getByLabel('API key', { exact: true }).fill(API_KEY);
     await page.getByRole('button', { name: 'Connect' }).click();
     await expect(page.locator('.login-error')).toContainText('valid URL');

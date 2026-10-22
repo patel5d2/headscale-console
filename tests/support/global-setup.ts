@@ -3,6 +3,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import zlib from 'node:zlib';
 import { buildCoverageReport, resetCoverage } from './coverage.js';
 import { MOCK, MOCK_PORT, NODE_COVERAGE_DIR, ROOT, SERVERS, TMP, type ServerName } from './env.js';
 import { startMockHeadscale } from './mock-headscale.js';
@@ -25,10 +26,13 @@ echo 'not json'
 /** A copy of public/ whose Browser SSH client is the test stand-in. */
 function testPublicDir(dir: string): string {
   const pub = path.join(dir, 'public');
-  fs.cpSync(path.join(ROOT, 'public'), pub, { recursive: true, filter: (src) => !src.includes(`${path.sep}ssh`) });
+  const realSsh = path.join(ROOT, 'public', 'ssh');
+  fs.cpSync(path.join(ROOT, 'public'), pub, { recursive: true, filter: (src) => src !== realSsh && !src.startsWith(realSsh + path.sep) });
   fs.mkdirSync(path.join(pub, 'ssh'), { recursive: true });
   fs.copyFileSync(path.join(ROOT, 'tests/support/fake-ssh/wasm_exec.js'), path.join(pub, 'ssh/wasm_exec.js'));
-  fs.writeFileSync(path.join(pub, 'ssh/hp_ssh.wasm'), Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00])); // an empty module
+  const wasm = Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]); // an empty module
+  fs.writeFileSync(path.join(pub, 'ssh/hp_ssh.wasm'), wasm);
+  fs.writeFileSync(path.join(pub, 'ssh/hp_ssh.wasm.gz'), zlib.gzipSync(wasm));
   return pub;
 }
 
@@ -44,7 +48,8 @@ function envFor(name: ServerName): NodeJS.ProcessEnv {
       return {
         ...base, HEADSCALE_URL: MOCK, HOST_ACTIONS: 'true', HEADSCALE_UNIT: 'headscale', PUBLIC_DIR: testPublicDir(dir),
         DATA_DIR: path.join(dir, 'data'), STATE_DIRECTORY: path.join(dir, 'state'), UPDATE_STATUS_DIR: path.join(dir, 'update-status'),
-        HEADSCALE_RELEASES_URL: `${MOCK}/__mock/releases`, AUDIT_MAX_BYTES: '4000', PATH: `${bin}:${process.env.PATH}`,
+        HEADSCALE_RELEASES_URL: `${MOCK}/__mock/releases`, RELEASES_CACHE_MS: '1', AUDIT_MAX_BYTES: '20000', POLICY_HISTORY_MAX: '5',
+        PATH: `${bin}:${process.env.PATH}`,
       };
     case 'open':
       return { ...base, ALLOWED_HEADSCALE_HOSTS: '127.0.0.1, localhost', HEADSCALE_RELEASES_URL: `${MOCK}/__mock/releases` };

@@ -44,7 +44,7 @@ export const test = base.extend<Fixtures>({
       await page.goto(`${url(server)}/#/login`);
       if (server !== 'full' && server !== 'broken') await page.getByLabel('Headscale server URL').fill(MOCK);
       await page.getByLabel('API key', { exact: true }).fill(API_KEY);
-      await page.getByLabel('Remember me on this device').setChecked(remember);
+      await page.getByRole('checkbox', { name: /Remember me/ }).setChecked(remember);
       await page.getByRole('button', { name: 'Connect' }).click();
       await expect(page.locator('h1')).toHaveText('Overview');
       if (to !== '#/overview') {
