@@ -211,7 +211,7 @@ export async function render(ctx: Ctx, _params: unknown, root: HTMLElement): Pro
     const owner = ownerLabel(n);
     const v4 = nodeIPv4(n);
     const seen = parseTime(n.lastSeen);
-    const ipBtn = h('button', { class: 'ip-btn mono', type: 'button', title: 'Copy addresses' }, v4 || '—', icon('chevronDown', 12, 'faint'));
+    const ipBtn = h('button', { class: 'ip-btn mono', type: 'button', 'aria-label': 'Copy addresses', title: 'Copy addresses' }, v4 || '—', icon('chevronDown', 12, 'faint'));
     ipBtn.addEventListener('click', (e) => { e.stopPropagation(); addressMenu(ctx, ipBtn, n); });
     const check = h('input', { type: 'checkbox', checked: state.selected.has(n.id), 'aria-label': `Select ${nodeName(n)}` });
     check.addEventListener('change', () => { if (check.checked) state.selected.add(n.id); else state.selected.delete(n.id); renderBulk(); });

@@ -109,6 +109,7 @@ export function cmpVersion(a, b) {
 // Headscale policies are HuJSON (JSON + comments + trailing commas).
 export function stripHuJSON(src) {
     let out = '';
+    const commas = new Set();
     let i = 0;
     let inStr = false;
     while (i < src.length) {
@@ -150,10 +151,14 @@ export function stripHuJSON(src) {
             i += 2;
             continue;
         }
+        if (c === ',')
+            commas.add(out.length);
         out += c;
         i++;
     }
-    return out.replace(/,(\s*[}\]])/g, ' $1'); // drop trailing commas before } or ]
+    // A comma followed by a closing bracket can also occur inside a JSON string.
+    // Only remove commas that the scanner encountered outside strings/comments.
+    return out.replace(/,(\s*[}\]])/g, (match, closing, offset) => commas.has(offset) ? ` ${closing}` : match);
 }
 export function parseHuJSON(src) {
     const clean = stripHuJSON(src);

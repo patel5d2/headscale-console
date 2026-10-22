@@ -25,7 +25,7 @@ test.describe('machines list', () => {
     await search.fill('');
 
     const filter = async (label: string): Promise<void> => {
-      await page.getByRole('button', { name: 'Filters' }).click();
+      await page.getByRole('button', { name: 'Filters', exact: true }).click();
       await page.getByRole('menuitem', { name: label, exact: true }).click();
     };
     const expectNames = async (names: string[]): Promise<void> => {
@@ -73,7 +73,8 @@ test.describe('machines list', () => {
     await login({ to: '#/dns' });
     await page.getByLabel('MagicDNS base domain').fill('tail.example.com');
     await page.getByRole('button', { name: 'Save' }).click();
-    await page.evaluate(() => { location.hash = '#/machines'; });
+    await page.getByRole('link', { name: 'Machines' }).click();
+    await expect(page.locator('.list-meta')).toHaveText('4 machines · 2 connected');
     await page.locator('tr', { hasText: 'laptop' }).getByRole('button', { name: 'Copy addresses' }).click();
     await expect(page.getByRole('menu')).toContainText('laptop.tail.example.com');
     await page.getByRole('menuitem', { name: /laptop short/ }).click();

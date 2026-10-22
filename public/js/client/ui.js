@@ -335,6 +335,8 @@ export function formDialog({ title, subtitle, fields, submitLabel = 'Save', dang
 // ------------------------------------------------------------------- menus --
 let openMenu = null;
 export function closeMenus() {
+    if (openMenu)
+        console.log('closeMenus called from:\n', new Error().stack);
     openMenu?.remove();
     openMenu = null;
 }
@@ -343,7 +345,11 @@ document.addEventListener('mousedown', (e) => { if (openMenu && !openMenu.contai
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape')
     closeMenus(); });
 window.addEventListener('resize', closeMenus);
-window.addEventListener('scroll', closeMenus, true);
+window.addEventListener('scroll', (e) => {
+    if (openMenu && openMenu.contains(e.target))
+        return;
+    closeMenus();
+}, true);
 export function showMenu(anchor, items, { align = 'right' } = {}) {
     closeMenus();
     const menu = h('div', { class: 'menu', role: 'menu' });
@@ -373,7 +379,7 @@ export function showMenu(anchor, items, { align = 'right' } = {}) {
     menu.style.left = left + 'px';
     menu.style.top = top + 'px';
     openMenu = menu;
-    menu.querySelector('.menu-item:not([disabled])')?.focus();
+    menu.querySelector('.menu-item:not([disabled])')?.focus({ preventScroll: true });
     menu.addEventListener('keydown', (e) => {
         const list = [...menu.querySelectorAll('.menu-item:not([disabled])')];
         const i = list.indexOf(document.activeElement);
@@ -418,13 +424,17 @@ export function chipInput(initial = [], { placeholder = 'Add…', normalize = (s
         values.forEach((v, i) => chips.appendChild(h('span', { class: 'chip' }, v, h('button', { type: 'button', 'aria-label': `Remove ${v}`, onclick: () => { values.splice(i, 1); render(); } }, icon('x', 12)))));
     };
     const add = () => {
-        for (let p of input.value.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean)) {
-            p = normalize(p);
+        const pending = input.value.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean).map(normalize);
+        // Validate the whole entry before changing the chips. A rejected later token
+        // must not leave an earlier token hidden in the values sent to Headscale.
+        for (const p of pending) {
             const e = validate(p);
             if (e) {
                 err.textContent = e;
                 return false;
             }
+        }
+        for (const p of pending) {
             if (!values.includes(p))
                 values.push(p);
         }

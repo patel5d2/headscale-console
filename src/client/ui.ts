@@ -410,13 +410,17 @@ export function formDialog<R = true>({ title, subtitle, fields, submitLabel = 'S
 // ------------------------------------------------------------------- menus --
 let openMenu: HTMLDivElement | null = null;
 export function closeMenus(): void {
+  if (openMenu) console.log('closeMenus called from:\n', new Error().stack);
   openMenu?.remove();
   openMenu = null;
 }
 document.addEventListener('mousedown', (e) => { if (openMenu && !openMenu.contains(e.target as Node)) closeMenus(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenus(); });
 window.addEventListener('resize', closeMenus);
-window.addEventListener('scroll', closeMenus, true);
+window.addEventListener('scroll', (e) => {
+  if (openMenu && openMenu.contains(e.target as Node)) return;
+  closeMenus();
+}, true);
 
 export type MenuItem = null | false | undefined | { divider: true } | { header: string } | {
   label: string; icon?: IconName | null; onClick?: () => void; danger?: boolean; disabled?: boolean; hint?: string | null;
@@ -445,7 +449,7 @@ export function showMenu(anchor: Element, items: MenuItem[], { align = 'right' }
   menu.style.left = left + 'px';
   menu.style.top = top + 'px';
   openMenu = menu;
-  menu.querySelector<HTMLElement>('.menu-item:not([disabled])')?.focus();
+  menu.querySelector<HTMLElement>('.menu-item:not([disabled])')?.focus({ preventScroll: true });
   menu.addEventListener('keydown', (e) => {
     const list = [...menu.querySelectorAll<HTMLElement>('.menu-item:not([disabled])')];
     const i = list.indexOf(document.activeElement as HTMLElement);

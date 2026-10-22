@@ -1,0 +1,12 @@
+{
+  "id": "session-1792705837169",
+  "startedAt": "2026-10-22T21:50:37.170Z",
+  "cwd": "/Users/dharminpatel/Downloads/headscale-console",
+  "context": {},
+  "metrics": {
+    "edits": 0,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  }
+}
