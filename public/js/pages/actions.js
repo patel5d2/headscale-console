@@ -389,6 +389,12 @@ function upFlags(url, key, tags, o) {
     tags.length && `--advertise-tags=${tags.join(',')}`,
     o.hostname && `--hostname=${o.hostname}`,
     o.ssh && '--ssh',
+    o.useExitNode && `--exit-node=${o.useExitNode}`,
+    o.useExitNode && o.exitLan && '--exit-node-allow-lan-access',
+    o.shieldsUp && '--shields-up',
+    o.operator && `--operator=${o.operator}`,
+    o.forceReauth && '--force-reauth',
+    o.qr && '--qr',
     o.reset && '--reset',
   ].filter(Boolean);
 }
@@ -419,6 +425,7 @@ export function commandBuilder(url, key, tags = []) {
     inp.addEventListener('input', () => { o[prop] = parse(inp.value.trim()); show(); });
     return inp;
   };
+  const optional = (label, input) => h('label', { class: 'field' }, h('span', { class: 'field-label' }, label, h('span', { class: 'muted' }, ' (optional)')), input);
   show();
   return h('div', { class: 'stack' },
     tabs(Object.entries(OS_LABELS).map(([id, label]) => ({ id, label })), os, (id) => { os = id; show(); }),
@@ -430,12 +437,17 @@ export function commandBuilder(url, key, tags = []) {
           check('acceptDns', 'Accept DNS', 'Use MagicDNS and the tailnet\'s DNS settings.'),
           check('exitNode', 'Advertise exit node', 'Offer this device as an exit node (approve it afterwards).'),
           check('ssh', 'Tailscale SSH', 'Run the SSH server (Linux; not the macOS App Store app).'),
-          check('reset', 'Reset settings', 'Clear flags from a previous tailscale up on this device.')),
+          check('reset', 'Reset settings', 'Clear flags from a previous tailscale up on this device.'),
+          check('shieldsUp', 'Shields up', 'Block all incoming connections to this device.'),
+          check('exitLan', 'Allow LAN with exit node', 'Keep local network access while using an exit node.'),
+          check('forceReauth', 'Force re-authentication', 'Log in again even if the device is already connected.'),
+          check('qr', 'Show QR code', 'Print the login URL as a QR code (for interactive login).')),
         h('div', { class: 'grid-2' },
-          h('label', { class: 'field' }, h('span', { class: 'field-label' }, 'Hostname', h('span', { class: 'muted' }, ' (optional)')),
-            text('hostname', 'my-laptop', (s) => s.toLowerCase().replace(/[^a-z0-9-]/g, ''))),
-          h('label', { class: 'field' }, h('span', { class: 'field-label' }, 'Advertise routes', h('span', { class: 'muted' }, ' (optional)')),
-            text('routes', '192.168.1.0/24, 10.0.0.0/8', (s) => s.split(/[\s,]+/).filter(validCIDR)))))));
+          optional('Hostname', text('hostname', 'my-laptop', (s) => s.toLowerCase().replace(/[^a-z0-9-]/g, ''))),
+          optional('Advertise routes', text('routes', '192.168.1.0/24, 10.0.0.0/8', (s) => s.split(/[\s,]+/).filter(validCIDR))),
+          // Pasted into a root shell, so only characters that are safe unquoted get through.
+          optional('Use exit node', text('useExitNode', '100.64.0.5 or exit-node-name', (s) => s.replace(/[^A-Za-z0-9.:-]/g, ''))),
+          optional('Operator (Linux user)', text('operator', 'alice', (s) => s.replace(/[^a-z0-9_-]/gi, '')))))));
 }
 
 export function keyResult(url, key, tags = []) {

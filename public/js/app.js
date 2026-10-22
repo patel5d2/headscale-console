@@ -3,6 +3,7 @@ import { HeadscaleAPI } from './api.js';
 import { h, clear, icon, logo, showMenu, toast, spinner } from './ui.js';
 import { store, hostOf, applyTheme } from './util.js';
 import * as login from './pages/login.js';
+import * as overview from './pages/overview.js';
 import * as machines from './pages/machines.js';
 import * as machine from './pages/machine.js';
 import * as routesPage from './pages/routes.js';
@@ -98,6 +99,7 @@ function disconnect(expired = false) {
 // ---------------------------------------------------------------- router --
 const ROUTES = [
   { re: /^\/login$/, page: login, public: true },
+  { re: /^\/overview$/, page: overview, nav: 'overview' },
   { re: /^\/machines$/, page: machines, nav: 'machines' },
   { re: /^\/machines\/([^/]+)$/, page: machine, nav: 'machines', params: ['id'] },
   { re: /^\/routes$/, page: routesPage, nav: 'routes' },
@@ -110,6 +112,7 @@ const ROUTES = [
 ];
 
 const NAV = [
+  { id: 'overview', label: 'Overview', href: '#/overview' },
   { id: 'machines', label: 'Machines', href: '#/machines' },
   { id: 'routes', label: 'Routes', href: '#/routes' },
   { id: 'users', label: 'Users', href: '#/users' },
@@ -253,7 +256,7 @@ document.addEventListener('keydown', (e) => {
   if (!ctx.api || e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.key === 'g') { ctx._g = Date.now(); return; }
   if (ctx._g && Date.now() - ctx._g < 800) {
-    const map = { m: '#/machines', u: '#/users', a: '#/acls', d: '#/dns', l: '#/logs', s: '#/settings', r: '#/routes', k: '#/settings/keys' };
+    const map = { o: '#/overview', m: '#/machines', u: '#/users', a: '#/acls', d: '#/dns', l: '#/logs', s: '#/settings', r: '#/routes', k: '#/settings/keys' };
     if (map[e.key]) { ctx.navigate(map[e.key]); ctx._g = 0; }
   }
 });

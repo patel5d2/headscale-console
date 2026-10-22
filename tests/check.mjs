@@ -35,6 +35,39 @@ assert.deepEqual(d.map((r) => r.op + r.line), [' a', '-b', ' c', '+x', ' d']);
 assert.equal(d.filter((r) => r.op !== '+').map((r) => r.line).join('\n'), 'a\nb\nc\nd');
 assert.equal(d.filter((r) => r.op !== '-').map((r) => r.line).join('\n'), 'a\nc\nx\nd');
 
+// checkAccess / checkSsh: the access checker's policy evaluation.
+const { checkAccess, checkSsh, cidrContains, splitDst } = await import('../public/js/pages/policy-check.js');
+const alice = { user: { name: 'alice', email: 'alice@x.com' }, tags: [], ips: ['100.64.0.1'] };
+const alice2 = { user: { name: 'alice', email: 'alice@x.com' }, tags: [], ips: ['100.64.0.2'] };
+const bob = { user: { name: 'bob' }, tags: [], ips: ['100.64.0.3'] };
+const webSrv = { user: null, tags: ['tag:web'], ips: ['100.64.0.9'] };
+const pol = {
+  groups: { 'group:admins': ['alice@'] },
+  hosts: { tailnet: '100.64.0.0/10' },
+  acls: [
+    { action: 'accept', src: ['group:admins'], dst: ['*:*'] },
+    { action: 'accept', src: ['autogroup:member'], dst: ['autogroup:self:*'] },
+    { action: 'accept', src: ['autogroup:member'], dst: ['tag:web:80,443,8000-8100'] },
+    { action: 'accept', src: ['tag:web'], proto: 'udp', dst: ['tailnet:53'] },
+  ],
+  ssh: [{ action: 'check', src: ['autogroup:member'], dst: ['autogroup:self'], users: ['autogroup:nonroot'] }],
+};
+assert.equal(checkAccess(pol, alice, bob, 22).index, 0);
+assert.equal(checkAccess(pol, bob, bob, 22).index, 1); // autogroup:self
+assert.equal(checkAccess(pol, bob, alice, 22).allowed, false);
+assert.equal(checkAccess(pol, bob, webSrv, 443).index, 2);
+assert.equal(checkAccess(pol, bob, webSrv, 8050).index, 2);
+assert.equal(checkAccess(pol, bob, webSrv, 22).allowed, false);
+assert.equal(checkAccess(pol, webSrv, bob, 53, 'udp').index, 3);
+assert.equal(checkAccess(pol, webSrv, bob, 53, 'tcp').allowed, false);
+assert.equal(checkAccess({}, bob, alice, 1).allowed, true, 'no rules = allow all');
+assert.equal(checkSsh(pol, alice, alice2, 'root').allowed, false);
+assert.equal(checkSsh(pol, alice, alice2, 'ubuntu').action, 'check');
+assert.equal(checkSsh(pol, alice, bob, 'ubuntu').allowed, false);
+assert.ok(cidrContains('100.64.0.0/10', ['100.100.1.1']) && !cidrContains('100.64.0.0/10', ['100.128.0.1']));
+assert.deepEqual(splitDst('tag:web:80,443'), { alias: 'tag:web', ports: '80,443' });
+assert.deepEqual(splitDst('tag:web'), { alias: 'tag:web', ports: '*' });
+
 // upCommand: macOS uses the app's bundled CLI.
 assert.equal(upCommand('mac', 'https://hs.example.com', 'hskey-auth-X', [], { acceptRoutes: true, acceptDns: true }),
   'sudo /Applications/Tailscale.app/Contents/MacOS/Tailscale up --auth-key=hskey-auth-X --login-server=https://hs.example.com --accept-routes');

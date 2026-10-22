@@ -1,6 +1,7 @@
 import { h, put, icon, button, badge, callout, clear, toast, tabs, spinner, errorState, confirmDialog, modal } from '../ui.js';
 import { parseHuJSON, hasComments, relTime, download, nodeTags, userLabel, lineDiff } from '../util.js';
 import { TEMPLATES, SNIPPETS, mergePolicy } from './policy-library.js';
+import { visualEditor, accessChecker } from './policy-editor.js';
 
 // ------------------------------------------------------------- highlighter --
 function escapeHtml(s) {
@@ -288,6 +289,8 @@ export async function render(ctx, _params, root) {
   function draw() {
     clear(tabBar).appendChild(tabs([
       { id: 'editor', label: 'Policy file', icon: 'code' },
+      { id: 'visual', label: 'Visual editor', icon: 'edit' },
+      { id: 'check', label: 'Access checker', icon: 'shield' },
       { id: 'preview', label: 'Preview rules', icon: 'eye' },
       { id: 'tags', label: 'Tags', icon: 'tag' },
       { id: 'changes', label: 'Changes', icon: 'file' },
@@ -302,6 +305,10 @@ export async function render(ctx, _params, root) {
           editor.el),
         h('p', { class: 'help mt-2' }, 'HuJSON: comments and trailing commas are allowed. Press ', h('kbd', 'Ctrl'), '+', h('kbd', 'S'), ' to save.'));
       setStatus();
+    } else if (view === 'visual') {
+      content.appendChild(visualEditor(ctx, { get: () => editor.value, set: (t) => { editor.value = t; setStatus(); }, readOnly }));
+    } else if (view === 'check') {
+      content.appendChild(accessChecker(ctx, editor.value));
     } else if (view === 'changes') {
       content.appendChild(changesView(saved, editor.value));
     } else if (view === 'preview') {

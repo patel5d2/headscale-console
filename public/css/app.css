@@ -584,6 +584,16 @@ button.stat { font: inherit; text-align: left; cursor: pointer; }
 .diff-ctx { color: var(--text-2); }
 .diff-gap { padding: 2px 12px; color: var(--text-3); background: var(--surface-2); }
 
+/* Overview */
+.attention-list { display: flex; flex-direction: column; gap: 8px; }
+.attention { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-left-width: 3px; border-radius: var(--radius); background: var(--surface); color: var(--text); }
+.attention:hover { text-decoration: none; background: var(--surface-2); }
+.attention > div { flex: 1; min-width: 0; }
+.attention-title { font-weight: 550; }
+.attention-danger { border-left-color: var(--danger); } .attention-danger > .icon:first-child { color: var(--danger); }
+.attention-warning { border-left-color: var(--warning); } .attention-warning > .icon:first-child { color: var(--warning); }
+.attention-info { border-left-color: var(--accent); } .attention-info > .icon:first-child { color: var(--accent-text); }
+
 /* Browser SSH */
 .ssh-term { height: calc(100vh - 300px); min-height: 320px; padding: 8px; background: #0b0d10; border-radius: var(--radius); overflow: hidden; }
 .ssh-term[hidden] { display: none; }

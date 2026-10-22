@@ -217,7 +217,15 @@ export function createAuthKey(ctx, after, userId) {
   const ephemeral = h('input', { type: 'checkbox' });
   const preapproved = h('input', { type: 'checkbox', checked: true, disabled: true });
   const exp = h('select', { class: 'input' },
-    [['1', '1 day'], ['7', '7 days'], ['30', '30 days'], ['90', '90 days'], ['365', '1 year']].map(([v, l]) => h('option', { value: v, selected: v === '90' }, l)));
+    [['1', '1 day'], ['7', '7 days'], ['30', '30 days'], ['90', '90 days'], ['365', '1 year'], ['custom', 'Exact date and time…']].map(([v, l]) => h('option', { value: v, selected: v === '90' }, l)));
+  const expAt = h('input', { class: 'input', type: 'datetime-local', hidden: true, 'aria-label': 'Expires at' });
+  exp.addEventListener('change', () => { expAt.hidden = exp.value !== 'custom'; if (!expAt.hidden) expAt.focus(); });
+  const expiration = () => {
+    if (exp.value !== 'custom') return isoInDays(+exp.value);
+    const d = new Date(expAt.value); // datetime-local is the browser's local time
+    if (isNaN(d) || d <= new Date()) throw new Error('Pick an expiry date and time in the future.');
+    return d.toISOString();
+  };
   const tagChips = chipInput([], {
     placeholder: 'tag:server',
     normalize: (s) => (s.startsWith('tag:') ? s : `tag:${s}`).toLowerCase(),
@@ -238,7 +246,7 @@ export function createAuthKey(ctx, after, userId) {
         h('label', { class: 'check' }, preapproved, h('span', h('span', { class: 'check-label' }, 'Pre-approved'), h('span', { class: 'help' }, 'Headscale always pre-approves devices added with an auth key.')))),
       h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'Tags', h('span', { class: 'muted' }, ' (optional)')), tagChips.el,
         h('span', { class: 'help' }, 'Devices will be tagged, and owned by these tags. Tags must be in tagOwners.')),
-      h('label', { class: 'field' }, h('span', { class: 'field-label' }, 'Expiration'), exp,
+      h('label', { class: 'field' }, h('span', { class: 'field-label' }, 'Expiration'), exp, expAt,
         h('span', { class: 'help' }, 'The key itself expires; devices added with it follow their own key expiry.')),
       err),
     footer: (api) => [button('Cancel', { onClick: () => api.close() }), gen],
@@ -252,7 +260,7 @@ export function createAuthKey(ctx, after, userId) {
       if (!owner.value && !tags.length) throw new Error('A key without an owner needs at least one tag.');
       const k = await ctx.api.createPreAuthKey({
         user: owner.value || undefined, reusable: reusable.checked, ephemeral: ephemeral.checked,
-        expiration: isoInDays(+exp.value), aclTags: tags,
+        expiration: expiration(), aclTags: tags,
       });
       m.setBody(keyResult(url, k.key, tags));
       m.setFooter(button('Done', { variant: 'primary', onClick: () => m.close() }));
