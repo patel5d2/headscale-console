@@ -350,18 +350,18 @@ export function formDialog<R = true>({ title, subtitle, fields, submitLabel = 'S
     for (const f of fields) {
       let el: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
       if (f.type === 'select') {
-        el = h('select', { class: 'input', name: f.name }, (f.options || []).map((o) => h('option', { value: o.value, selected: String(o.value) === String(f.value) }, o.label)));
+        el = h('select', { class: 'input', name: f.name, 'aria-label': f.label }, (f.options || []).map((o) => h('option', { value: o.value, selected: String(o.value) === String(f.value) }, o.label)));
       } else if (f.type === 'checkbox') {
-        el = h('input', { type: 'checkbox', name: f.name, checked: !!f.value });
+        el = h('input', { type: 'checkbox', name: f.name, checked: !!f.value, 'aria-label': f.label });
         form.appendChild(h('label', { class: 'check' }, el, h('span', h('span', { class: 'check-label' }, f.label), f.help ? h('span', { class: 'help' }, f.help) : null)));
         inputs[f.name] = el;
         continue;
       } else if (f.type === 'textarea') {
-        el = h('textarea', { class: 'input mono', name: f.name, rows: f.rows || 4, placeholder: f.placeholder, spellcheck: 'false' });
+        el = h('textarea', { class: 'input mono', name: f.name, 'aria-label': f.label, rows: f.rows || 4, placeholder: f.placeholder, spellcheck: 'false' });
         el.value = String(f.value ?? '');
       } else {
         el = h('input', {
-          class: 'input' + (f.mono ? ' mono' : ''), name: f.name, type: f.type || 'text', value: f.value ?? '',
+          class: 'input' + (f.mono ? ' mono' : ''), name: f.name, 'aria-label': f.label, type: f.type || 'text', value: f.value ?? '',
           placeholder: f.placeholder, autocomplete: 'off', spellcheck: 'false', required: f.required, min: f.min, max: f.max,
         });
       }
@@ -409,17 +409,21 @@ export function formDialog<R = true>({ title, subtitle, fields, submitLabel = 'S
 
 // ------------------------------------------------------------------- menus --
 let openMenu: HTMLDivElement | null = null;
+let menuAnchor: Element | null = null;
+let menuAnchorTop = 0;
 export function closeMenus(): void {
-  if (openMenu) console.log('closeMenus called from:\n', new Error().stack);
   openMenu?.remove();
   openMenu = null;
 }
 document.addEventListener('mousedown', (e) => { if (openMenu && !openMenu.contains(e.target as Node)) closeMenus(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenus(); });
 window.addEventListener('resize', closeMenus);
+// Close when scrolling moves the menu's anchor (scroll events arrive a frame late,
+// so the one from scrolling the anchor into view must not close the new menu).
 window.addEventListener('scroll', (e) => {
-  if (openMenu && openMenu.contains(e.target as Node)) return;
-  closeMenus();
+  if (!openMenu || openMenu.contains(e.target as Node)) return;
+  const r = menuAnchor?.getBoundingClientRect();
+  if (!r || r.top !== menuAnchorTop) closeMenus();
 }, true);
 
 export type MenuItem = null | false | undefined | { divider: true } | { header: string } | {
@@ -441,6 +445,8 @@ export function showMenu(anchor: Element, items: MenuItem[], { align = 'right' }
   }
   document.body.appendChild(menu);
   const r = anchor.getBoundingClientRect();
+  menuAnchor = anchor;
+  menuAnchorTop = r.top;
   const mw = menu.offsetWidth;
   const mh = menu.offsetHeight;
   const left = Math.max(8, Math.min(align === 'right' ? r.right - mw : r.left, window.innerWidth - mw - 8));

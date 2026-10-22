@@ -53,9 +53,10 @@ test('machine details validate names and tags, routes and expiry before saving',
   await expect(dialog).toBeHidden();
   expect((await mock('state')).nodes[0].approvedRoutes).toEqual(['172.16.0.0/16', '0.0.0.0/0', '::/0']);
 
-  await page.getByRole('switch', { name: 'Expiry', exact: true }).uncheck();
+  // The switch follows the server: it flips once the change has been saved.
+  await page.getByRole('switch', { name: 'Expiry', exact: true }).click();
   await expect(page.getByRole('switch', { name: 'Expiry', exact: true })).not.toBeChecked();
-  await page.getByRole('switch', { name: 'Expiry', exact: true }).check();
+  await page.getByRole('switch', { name: 'Expiry', exact: true }).click();
   await dialog.getByLabel('Expires in').selectOption('custom');
   await dialog.getByLabel('Custom date', { exact: true }).fill('');
   await dialog.getByRole('button', { name: 'Save expiry' }).click();
@@ -138,7 +139,7 @@ test('Add device generates commands for every OS, copies and downloads a script'
   await d.getByLabel('Operator (Linux user)', { exact: true }).fill('alice!');
   await expect(command).toContainText('--hostname=my-host');
   await expect(command).toContainText('--advertise-routes=192.168.2.0/24');
-  await expect(command).not.toContainText('\n');
+  expect(await command.textContent()).not.toContain('\n');
   const downloaded = page.waitForEvent('download');
   await d.getByRole('button', { name: 'Download as script' }).click();
   const script = await fs.readFile(await (await downloaded).path(), 'utf8');

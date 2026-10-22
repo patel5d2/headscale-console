@@ -73,6 +73,11 @@ async function waitUp(port: number): Promise<void> {
 }
 
 export default async function globalSetup(): Promise<() => Promise<void>> {
+  // A server left over from an interrupted run would answer instead of ours.
+  for (const { port } of Object.values(SERVERS)) {
+    const busy = await fetch(`http://127.0.0.1:${port}/healthz`).then(() => true, () => false);
+    if (busy) throw new Error(`Port ${port} is in use; stop the leftover server (lsof -ti tcp:${port} | xargs kill) and retry.`);
+  }
   fs.rmSync(TMP, { recursive: true, force: true });
   resetCoverage();
   const mock = await startMockHeadscale(MOCK_PORT);

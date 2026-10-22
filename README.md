@@ -1,9 +1,13 @@
 # Headscale Console
 
+[![CI](https://github.com/patel5d2/headscale-console/actions/workflows/ci.yml/badge.svg)](https://github.com/patel5d2/headscale-console/actions/workflows/ci.yml)
+[![Container image](https://github.com/patel5d2/headscale-console/actions/workflows/docker.yml/badge.svg)](https://github.com/patel5d2/headscale-console/pkgs/container/headscale-console)
+
 A clean, Tailscale-style web admin console for [Headscale](https://headscale.net). It talks to your Headscale server's REST API — on first open it asks for your Headscale URL and an API key, then gives you Machines, Routes, Users, Access controls, DNS and Settings pages modelled on `login.tailscale.com/admin`.
 
-- **Zero dependencies.** One small Node.js server (static files + API proxy) and a vanilla-JS front end. Nothing to `npm install`, no build step.
-- **Runs anywhere.** Docker / Docker Compose, a VM with systemd, or just `node server.js`.
+- **More than a viewer.** Bulk actions, an audit log of every change, policy version history with one-click restore, backup and restore, Browser SSH, log analysis, one-click Headscale updates, and an `hsconsole` command-line tool.
+- **Zero runtime dependencies.** Written in strict TypeScript, compiled to plain JavaScript: one small Node.js server (static files + API proxy) and a framework-free front end.
+- **Runs anywhere.** A prebuilt multi-arch image (amd64/arm64), Docker Compose, a VM with systemd, or just `node dist/server/server.js`.
 - **Light and dark themes**, keyboard shortcuts, responsive down to phone width.
 - **Tested against Headscale v0.29.5** (latest stable). Works with 0.26+; some fallbacks are included for older API shapes.
 
@@ -11,14 +15,26 @@ A clean, Tailscale-style web admin console for [Headscale](https://headscale.net
 
 ## Quick start
 
-### Docker Compose (recommended)
+### Prebuilt image (fastest)
+
+```bash
+docker run -d --name headscale-console --restart unless-stopped -p 8090:8080 \
+  -e HEADSCALE_URL=https://headscale.example.com \
+  -v headscale-console-data:/data \
+  ghcr.io/patel5d2/headscale-console:latest
+```
+
+Open **http://&lt;host&gt;:8090** and paste an API key. Leave out `HEADSCALE_URL` to type the server URL on the login page instead. Tags: `latest` (main), a release such as `2.0.0`, or `sha-<commit>`. With Compose: `docker compose -f docker-compose.ghcr.yml up -d`.
+
+### Docker Compose (build from source)
 
 ```bash
 cd headscale-console
+cp .env.example .env      # optional: set HEADSCALE_URL=https://your-headscale
 docker compose up -d --build
 ```
 
-Open **http://&lt;host&gt;:8090**, enter your Headscale URL (e.g. `https://headscale.example.com`) and an API key.
+Open **http://&lt;host&gt;:8090**. Without `HEADSCALE_URL` the login page asks for your Headscale URL (e.g. `https://headscale.example.com`) and an API key; it remembers the last few servers you used. With it, the URL is fixed and only the key is asked for. To change it later, edit `.env` and run `docker compose up -d` again.
 
 Create an API key on the Headscale host:
 
@@ -28,26 +44,19 @@ headscale apikeys create --expiration 90d
 docker exec -it headscale headscale apikeys create --expiration 90d
 ```
 
-### Plain Docker
-
-```bash
-docker build -t headscale-console .
-docker run -d --name headscale-console --restart unless-stopped \
-  -p 8090:8080 \
-  -e HEADSCALE_URL=https://headscale.example.com \
-  headscale-console
-```
-
 ### On a VM without Docker (systemd)
 
-Requires Node.js 18 or newer.
+Requires Node.js 20 or newer.
 
 ```bash
-sudo ./deploy/install-vm.sh https://headscale.example.com
-# → installs to /opt/headscale-console and starts headscale-console.service on port 8090
+sudo ./deploy/install-vm.sh --url https://headscale.example.com
+# → builds if needed, installs to /opt/headscale-console, links the hsconsole CLI,
+#   and starts headscale-console.service on port 8090
 ```
 
-Or just run it: `PORT=8090 node server.js`
+Options: `--port N`, `--host-actions` (Logs and one-click updates, see below), `--uninstall` (keeps data), `--purge` (removes data too), `-h` for help. Re-running it upgrades in place.
+
+Or just run it: `npm ci && npm run build && PORT=8090 node dist/server/server.js`
 
 ---
 
@@ -66,6 +75,12 @@ All settings are environment variables; none are required.
 | `HOST_ACTIONS` | `false` | Enables the **Logs** page and **one-click Headscale updates** when the console runs on the Headscale VM. Requires `HEADSCALE_URL`. See below. |
 | `HEADSCALE_UNIT` | `headscale` | systemd unit whose journal the Logs page reads. |
 | `BROWSER_SSH` | on | Set `false` to turn off Browser SSH. It's only ever on when `HEADSCALE_URL` is set and the SSH client is built. |
+| `DATA_DIR` | `./data` (`/data` in Docker) | Where the audit log and policy history are kept. Mount a volume here. |
+| `AUDIT_LOG` | on | Set `false` to stop recording changes. Needs `HEADSCALE_URL`. |
+| `AUDIT_MAX_BYTES` | `10485760` | The audit log rotates to `audit.jsonl.1` past this size. |
+| `POLICY_HISTORY_MAX` | `200` | Policy versions kept. |
+| `HEADSCALE_RELEASES_URL` | GitHub releases API | Release feed for update checks (e.g. a mirror). |
+| `RELEASES_CACHE_MS` | `3600000` | How long the release feed is cached. |
 
 ### Same Docker host as Headscale
 
@@ -119,25 +134,48 @@ networks:
 | **Settings → API keys** | ✅ | Create (shown once), expire, delete; marks the key used by this session. |
 | **Device approval** | ✅ | Register a device or approve/reject an auth request (e.g. SSH check mode) by its ID. Headscale's API has no list of pending requests. |
 | Server info / health | ✅ | Version, commit, database health, tailnet stats, IP backfill. |
+| **Bulk actions** | ➕ | Select machines (or *select all shown*) to approve routes, add/remove tags, disable expiry, expire keys or remove them in one go, with a per-machine result. |
+| **Audit log** | ➕ | Every change made through the console: who (API key prefix), what, when, the result. Search, failures-only filter, CSV export. Secrets are redacted; policies are recorded as a size and SHA-256. |
+| **Policy history** | ➕ | Each saved policy is versioned (including the one before the console's first change). Diff any version against the current policy and restore it. |
+| **Backup and restore** | ➕ | *Settings → Backup*: download users, machines, key metadata and the policy as JSON (no secrets). Restore previews what it will do, recreates missing users and replaces the policy. |
+| **Command line** | ➕ | `hsconsole` does the same from a terminal or script. See below. |
 | Funnel/Serve, Services/Apps, billing, user roles & invites, device posture, webhooks, sharing machines | ❌ | Not features of Headscale, so there's no API to drive. |
 | Client OS / version per machine | ❌ | Headscale's API doesn't expose them. |
 | Change machine owner | ❌ | Removed from Headscale's API; tag the machine or re-register it under another user instead. |
 
 ### Keyboard shortcuts
 
-`/` focus search · `g` then `o` Overview · `g m` Machines · `g r` Routes · `g u` Users · `g a` Access controls · `g d` DNS · `g s` Settings · `g k` Auth keys · `Ctrl/⌘ + S` save policy · `Esc` close dialogs/menus
+`/` focus search · `g` then `o` Overview · `g m` Machines · `g r` Routes · `g u` Users · `g a` Access controls · `g d` DNS · `g l` Logs · `g h` Audit log · `g s` Settings · `g k` Auth keys · `Ctrl/⌘ + S` save policy · `Esc` close dialogs/menus
+
+### Command line: `hsconsole`
+
+Installed with the VM installer and inside the image (`docker exec headscale-console hsconsole …`), or run `node dist/cli/hsconsole.js` from a checkout. Set `HEADSCALE_URL` and `HEADSCALE_API_KEY` (or pass `--url` / `--key`); add `--json` for machine-readable output.
+
+```bash
+hsconsole status                          # version, health, what needs attention
+hsconsole machines --search laptop
+hsconsole routes --pending && hsconsole approve router
+hsconsole join --user alice --os mac      # single-use key + the join command
+hsconsole policy get --out policy.hujson
+hsconsole policy set policy.hujson        # shows the diff; add --yes to save it
+hsconsole check laptop server --port 22   # would the policy allow it, and which rule?
+hsconsole backup --out backup.json
+```
+
+`hsconsole help` lists every command. Exit codes: `0` success, `1` error, `2` usage error.
 
 ---
 
 ## How it works & security
 
 ```
-Browser ──(same origin)──> Headscale Console (server.js) ──> Headscale REST API (/api/v1)
+Browser ──(same origin)──> Headscale Console (Node server) ──> Headscale REST API (/api/v1)
           Authorization: Bearer <API key>                    forwarded unchanged
 ```
 
-- Headscale's API doesn't send CORS headers, so the browser can't call it directly. `server.js` serves the UI and proxies `/proxy/api/v1/*` (plus `/version`) to your Headscale server. Nothing else is reachable through it.
-- The API key lives only in your browser — `localStorage` if you tick "Remember me", otherwise just the current tab — and is sent with each request. The server never stores or logs it.
+- Headscale's API doesn't send CORS headers, so the browser can't call it directly. The server serves the UI and proxies `/proxy/api/v1/*` (plus `/version`) to your Headscale server. Nothing else is reachable through it.
+- The API key lives only in your browser — `localStorage` if you tick "Remember me", otherwise just the current tab — and is sent with each request. The server never stores or logs it; the audit log records only the key's public prefix.
+- The console's own endpoints (audit log, policy history, host actions) verify the API key against the locked Headscale server before answering.
 - **An API key is full admin access.** Put the console somewhere only you can reach (your LAN or tailnet), or behind a reverse proxy with its own auth. Set `HEADSCALE_URL` so the proxy can't be pointed at other hosts.
 - Strict security headers (CSP with no inline scripts, `frame-ancestors 'none'`, `nosniff`, no referrer). The container runs as a non-root user with a read-only filesystem and all capabilities dropped.
 
@@ -159,14 +197,14 @@ Requirements:
 - `ssh` rules in your policy that let the chosen user log in. *Access controls → Add rules → SSH into your own devices* is a good start.
 - A reverse proxy in front of the console must forward WebSocket upgrades (Caddy does by default), and the console must be served at the root of its domain.
 
-Run `scripts/build-ssh.sh` once (needs Go and git). It puts the client in `public/ssh/`, which `node server.js` serves and the Docker build copies as is. If it's missing, the Docker build compiles it in a Go stage instead, which takes a few minutes and about 4 GB of free Docker disk space. To build without SSH, run `docker build --target app .`.
+Run `scripts/build-ssh.sh` once (needs Go and git). It puts the client in `public/ssh/`, which the server serves and the Docker build copies as is. If it's missing, the Docker build compiles it in a Go stage instead, which takes a few minutes and about 4 GB of free Docker disk space. To build without SSH, run `docker build --target app .`.
 
 ### Logs and one-click updates (host actions)
 
 Headscale has no API for its logs or for upgrading itself, so these need the console on the same VM as a Headscale installed from the official `.deb`:
 
 ```bash
-sudo ./deploy/install-vm.sh https://headscale.example.com --host-actions
+sudo ./deploy/install-vm.sh --url https://headscale.example.com --host-actions
 ```
 
 How it stays safe:
@@ -197,26 +235,38 @@ The console uses relative paths, so it also works under a sub-path (e.g. `/conso
 
 ---
 
-## Project layout
+## Development
+
+TypeScript in `src/`, compiled with `tsc` (no bundler, no runtime dependencies). Node.js 20+.
+
+```bash
+npm ci
+npm run build        # src/client → public/js, src/server + src/cli + src/shared → dist
+npm run typecheck
+npm run dev          # build, then serve on :8080
+npm test             # build + Playwright: API, end-to-end, unit and CLI tests, with coverage
+```
+
+Tests run against an in-memory mock Headscale (`tests/support/mock-headscale.ts`) and four console servers with different settings. The coverage report (server, CLI and browser code combined, mapped back to the TypeScript) is in `coverage/index.html`; `COVERAGE_REPORT_ONLY=1 npm test` reports without enforcing the thresholds. Run one file with `npx playwright test tests/e2e/machines.spec.ts`.
+
+CI (`.github/workflows/ci.yml`) typechecks, runs ShellCheck and the test suite on every push and pull request. `.github/workflows/docker.yml` builds the amd64/arm64 image, with Browser SSH, and publishes it to `ghcr.io/patel5d2/headscale-console` from `main` and `v*.*.*` tags.
+
+### Project layout
 
 ```
-server.js                 static server + Headscale API proxy (Node 18+, no deps)
-host.js                   optional host actions: logs, update requests (HOST_ACTIONS)
-public/index.html
-public/css/app.css        design tokens, light/dark theme, components
-public/js/app.js          shell, router, connection state
-public/js/api.js          Headscale REST client (with version fallbacks)
-public/js/ui.js           DOM helpers: modals, menus, toasts, toggles, chips…
-public/js/util.js         time/format helpers, HuJSON parser, storage
-public/js/pages/*.js      machines, machine, routes, users, acls, dns, settings, login
-Dockerfile · docker-compose.yml · deploy/ (systemd units, VM installer, root update helper)
-tests/check.mjs           self-check for policy merging, log parsing, diffs, join commands (npm test)
-scripts/build-ssh.sh      builds the Browser SSH client into public/ssh/ (pinned Headplane commit)
-public/vendor/xterm/      xterm.js 5.5.0 + fit addon (MIT), vendored
+src/server/          HTTP server, Headscale API proxy, SSH relay, audit log + policy history, host actions
+src/client/          front end: app shell and router, DOM helpers, pages/ (one module per page)
+src/shared/          used by both: API client, join commands, policy checker, backup, log parsing
+src/cli/hsconsole.ts command-line tool
+public/              index.html, css/, vendor/xterm/ (xterm.js 5.5.0, MIT); js/ and ssh/ are generated
+tests/               api/, e2e/, unit/ specs; support/ has the mock Headscale and test servers
+deploy/              systemd units, VM installer, root update helper
+scripts/build-ssh.sh builds the Browser SSH client into public/ssh/ (pinned Headplane commit)
 ```
 
 ## Troubleshooting
 
+- **The server URL field can't be edited** — the console was started with `HEADSCALE_URL`, which fixes the server. Change it (in `.env` for Docker Compose) and restart, or remove it to type the URL on the login page.
 - **"No Headscale API found"** — use the exact `server_url` from your Headscale config (e.g. `https://hs.example.com`), not the metrics port.
 - **"Could not reach Headscale"** from inside Docker — `localhost` is the container itself. Use the host's LAN IP, the public URL, or join Headscale's Docker network.
 - **Certificate errors** with a self-signed cert — set `HEADSCALE_INSECURE_TLS=true`.
