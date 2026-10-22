@@ -8,10 +8,12 @@ services:
       # Open http://<host>:8090 — change the left side if 8090 is taken.
       - "8090:8080"
     environment:
-      # Recommended: lock the console to your Headscale server. The login page
-      # then only asks for the API key, and the proxy can't be pointed elsewhere.
-      # Required for Browser SSH.
-      HEADSCALE_URL: "${HEADSCALE_URL:-https://headscale.example.com}"
+      # Recommended: lock the console to your Headscale server by putting
+      #   HEADSCALE_URL=https://hs.example.com
+      # in a .env file next to this one (see .env.example). The login page then
+      # only asks for the API key, and Browser SSH, the audit log and policy
+      # history are turned on. Left empty, the login page asks for the URL.
+      HEADSCALE_URL: "${HEADSCALE_URL:-}"
 
       # If HEADSCALE_URL is not set, optionally restrict which hosts can be entered.
       # ALLOWED_HEADSCALE_HOSTS: "headscale.example.com,192.168.0.50"

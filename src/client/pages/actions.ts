@@ -375,7 +375,7 @@ export function commandBuilder(url: string, key?: string, tags: string[] = []): 
     }
   };
   const check = (prop: keyof typeof o, label: string, help: string): HTMLLabelElement => {
-    const cb = h('input', { type: 'checkbox', checked: !!o[prop] });
+    const cb = h('input', { type: 'checkbox', checked: !!o[prop], 'aria-label': label });
     cb.addEventListener('change', () => { (o as Record<string, unknown>)[prop] = cb.checked; show(); });
     return h('label', { class: 'check' }, cb, h('span', h('span', { class: 'check-label' }, label), h('span', { class: 'help' }, help)));
   };

@@ -144,7 +144,7 @@ test('Add device generates commands for every OS, copies and downloads a script'
   const script = await fs.readFile(await (await downloaded).path(), 'utf8');
   expect(script).toContain('#!/bin/sh');
   await d.getByRole('tab', { name: 'macOS', exact: true }).click();
-  await expect(command).toContainText('brew');
+  await expect(command).toContainText('Tailscale-latest-macos.pkg');
   await d.getByRole('tab', { name: 'Windows', exact: true }).click();
   await expect(command).toContainText('winget');
   await expect(command).toContainText('; ');

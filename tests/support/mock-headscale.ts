@@ -78,7 +78,7 @@ export function seed(): State {
     ],
     releasesStatus: 200,
     wsMode: 'accept',
-    authRequests: { 'hskey-authreq-PENDING1': 'pending' },
+    authRequests: { 'hskey-authreq-PENDING1': 'pending', ANOTHER: 'pending' },
   };
 }
 

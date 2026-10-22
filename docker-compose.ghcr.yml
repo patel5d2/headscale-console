@@ -1,5 +1,7 @@
-# After the image has been published:
-# HEADSCALE_URL=https://headscale.example.com docker compose -f docker-compose.ghcr.yml up -d
+# Runs the published image; nothing to build.
+#   cp .env.example .env    # optional: set HEADSCALE_URL to lock the console to your server
+#   docker compose -f docker-compose.ghcr.yml up -d
+# Then open http://localhost:8090
 services:
   headscale-console:
     image: ghcr.io/patel5d2/headscale-console:${HEADSCALE_CONSOLE_TAG:-latest}
@@ -7,7 +9,7 @@ services:
     ports:
       - "8090:8080"
     environment:
-      HEADSCALE_URL: "${HEADSCALE_URL:?Set HEADSCALE_URL to your Headscale server URL}"
+      HEADSCALE_URL: "${HEADSCALE_URL:-}"
       DATA_DIR: /data
       TZ: "${TZ:-UTC}"
     volumes:

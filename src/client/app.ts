@@ -78,6 +78,7 @@ async function connect(conn: Conn): Promise<void> {
   ctx.conn = conn;
   store.set('conn', conn, !!conn.remember); // localStorage if remembered, else this tab only
   store.set('lastUrl', conn.url);
+  store.set('recentUrls', [conn.url, ...store.get<string[]>('recentUrls', []).filter((u) => u !== conn.url)].slice(0, 5));
   ctx.server.version = await api.version();
   ctx.data = { users: null, nodes: null, loadedAt: 0 };
 }

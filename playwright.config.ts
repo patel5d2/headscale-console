@@ -18,6 +18,8 @@ export default defineConfig({
     ...devices['Desktop Chrome'],
     trace: 'retain-on-failure',
     permissions: ['clipboard-read', 'clipboard-write'],
+    // Fixed so date inputs (local time) give the same ISO timestamps everywhere.
+    timezoneId: 'UTC',
   },
   projects: [{ name: 'chromium' }],
 });

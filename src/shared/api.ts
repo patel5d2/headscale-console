@@ -144,12 +144,15 @@ export class HeadscaleAPI {
       // Older servers require ?user=; gather per user.
       if (!users) throw e;
       const all: PreAuthKey[] = [];
+      let failed = 0;
       for (const u of users) {
         const r = await this.get<{ preAuthKeys?: PreAuthKey[] }>('preauthkey', { user: u.id })
           .catch(() => this.get<{ preAuthKeys?: PreAuthKey[] }>('preauthkey', { user: u.name }))
-          .catch(() => ({ preAuthKeys: [] }));
+          .catch(() => { failed++; return { preAuthKeys: [] }; });
         all.push(...(r.preAuthKeys || []).map((k) => ({ ...k, user: k.user || u })));
       }
+      // Nothing answered at all: show the server's error, not an empty list.
+      if (users.length && failed === users.length) throw e;
       return all;
     }
   }

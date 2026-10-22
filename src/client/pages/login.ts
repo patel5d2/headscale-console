@@ -6,12 +6,14 @@ import { hostOf, store } from '../util.js';
 export function render(ctx: AppCtx, _params: unknown, root: HTMLElement): void {
   const locked = ctx.config.lockedUrl;
   const lastUrl = ctx.conn?.url || store.get('lastUrl', '');
+  const recent = store.get<string[]>('recentUrls', []);
 
   const urlInput = h('input', {
     class: 'input', id: 'hs-url', name: 'url', type: 'url', inputmode: 'url', autocomplete: 'url',
     placeholder: 'https://headscale.example.com', value: locked || lastUrl, spellcheck: 'false',
-    readonly: !!locked, required: true, 'aria-label': 'Headscale server URL',
+    readonly: !!locked, required: true, 'aria-label': 'Headscale server URL', list: 'hs-recent',
   });
+  const recentList = h('datalist', { id: 'hs-recent' }, ...recent.map((u) => h('option', { value: u })));
   const keyInput = h('input', {
     class: 'input mono', id: 'hs-key', name: 'key', type: 'password', autocomplete: 'off',
     placeholder: 'hskey-api-…', spellcheck: 'false', required: true, 'aria-label': 'API key',
@@ -27,10 +29,10 @@ export function render(ctx: AppCtx, _params: unknown, root: HTMLElement): void {
   const form = h('form', { class: 'stack', novalidate: true },
     h('label', { class: 'field' },
       h('span', { class: 'field-label' }, 'Headscale server URL'),
-      urlInput,
+      urlInput, recentList,
       h('span', { class: 'help' }, locked
-        ? 'This console is locked to this server by the HEADSCALE_URL setting.'
-        : 'The public URL of your Headscale server (its server_url), including https://.')),
+        ? ['Set by HEADSCALE_URL when the console was started. To use another server, change it (in ', h('code', '.env'), ' for Docker) and restart the console.']
+        : 'The public URL of your Headscale server (its server_url), e.g. https://hs.example.com.')),
     h('label', { class: 'field' },
       h('span', { class: 'field-label' }, 'API key'),
       h('div', { class: 'input-group' }, keyInput, reveal),
@@ -62,7 +64,10 @@ export function render(ctx: AppCtx, _params: unknown, root: HTMLElement): void {
       const { status, message } = err as ApiError;
       const msg = status === 401 ? 'The API key was rejected. Check that it is correct and has not expired.'
         : status === 404 ? `No Headscale API found at ${hostOf(url)}. Check the URL (it should be the server_url from your Headscale config).`
-          : message;
+          : status === 502 ? `${message}. ${locked
+            ? 'Check that the server is up and reachable from the console. If this is the wrong server, change HEADSCALE_URL and restart the console.'
+            : 'Check the URL and that the server is reachable from the machine running this console.'}`
+            : message;
       errBox.appendChild(callout('error', 'Could not connect', msg));
     } finally {
       submit.disabled = false;

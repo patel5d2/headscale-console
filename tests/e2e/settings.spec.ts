@@ -21,7 +21,7 @@ test.describe('settings', () => {
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
     await page.getByRole('button', { name: 'Backfill…' }).click();
     await page.getByRole('button', { name: 'Backfill', exact: true }).click();
-    await expect(page.getByRole('dialog', { name: 'Backfill complete' })).toContainText('Assigned IPv6');
+    await expect(page.getByRole('dialog', { name: 'Backfill complete' })).toContainText('added IPv6');
     await page.getByRole('button', { name: 'Done', exact: true }).click();
     await mock('fail', { path: '/node/backfillips$', message: 'backfill failed' });
     await page.getByRole('button', { name: 'Backfill…' }).click();
@@ -85,7 +85,7 @@ test.describe('settings', () => {
     await expect(page.locator('.empty-title')).toHaveText('No active auth keys');
     await page.getByRole('tab', { name: /^Used/ }).click();
     await expect(page.locator('.empty-title')).toHaveText('Nothing here');
-    await mock('fail', { path: '^/api/v1/preauthkey$', method: 'GET', message: 'cannot list keys', times: 4 });
+    await mock('fail', { path: '^/api/v1/preauthkey$', method: 'GET', message: 'cannot list keys', times: 99 });
     await section(page, 'General');
     await section(page, 'Auth keys');
     await expect(page.locator('.callout-error')).toContainText('cannot list keys');
@@ -179,9 +179,10 @@ test.describe('settings', () => {
     await upload(JSON.stringify(backup));
     await expect(page.locator('.settings-panel')).toContainText('Create 1 missing user: restored');
     await expect(page.locator('.diff-add')).toContainText('{"acls": []}');
-    await page.getByRole('button', { name: 'Restore', exact: true }).click();
+    const restore = page.locator('#main').getByRole('button', { name: 'Restore', exact: true });
+    await restore.click();
     await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-    await page.getByRole('button', { name: 'Restore', exact: true }).click();
+    await restore.click();
     await page.getByRole('dialog').getByRole('button', { name: 'Restore', exact: true }).click();
     await expect(page.locator('.callout-success')).toContainText('1 user created and the policy replaced');
     expect((await mock('state')).users).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'restored', displayName: 'Restored User' })]));
