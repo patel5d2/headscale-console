@@ -48,7 +48,9 @@ export async function render(ctx: Ctx, _params: unknown, root: HTMLElement): Pro
   function setStatus(): void {
     if (!editor) return;
     clear(statusEl);
-    const parsed = parseHuJSON(editor.value);
+    // A blank editor is "no policy", not a syntax error (it just can't be saved).
+    const blank = !editor.value.trim();
+    const parsed = blank ? { ok: true as const } : parseHuJSON(editor.value);
     editor.setErrorLine(parsed.ok ? null : parsed.line);
     if (!parsed.ok) {
       put(statusEl, h('span', { class: 'ed-state error' }, icon('alert', 14), ' ', parsed.line ? `Syntax error on line ${parsed.line}` : 'Syntax error'),
@@ -60,7 +62,7 @@ export async function render(ctx: Ctx, _params: unknown, root: HTMLElement): Pro
       statusEl.append(h('span', { class: 'ed-state ok' }, icon('check', 14), ' ',
         updatedAt ? `Saved · last updated ${relTime(updatedAt)}` : (saved ? 'Saved' : 'No policy set — all traffic is allowed')));
     }
-    saveBtn.disabled = readOnly || !dirty() || !parsed.ok;
+    saveBtn.disabled = readOnly || !dirty() || !parsed.ok || blank;
     discardBtn.disabled = !dirty();
   }
 
