@@ -1,11 +1,14 @@
 # Headscale Console — tiny, dependency-free image
 
-# Stage 1: build the Browser SSH client (Tailscale compiled to WebAssembly).
-# Skip it with: docker build --target app .  (Browser SSH is then unavailable.)
+# Stage 1: the Browser SSH client (Tailscale compiled to WebAssembly). If
+# scripts/build-ssh.sh already put it in public/ssh/, that copy ships with public/
+# below and nothing is compiled here; otherwise it's built (needs ~4 GB of Docker disk).
+# Skip SSH entirely with: docker build --target app .
 FROM golang:1.27-alpine AS ssh
 RUN apk add --no-cache bash git patch
-COPY scripts/build-ssh.sh /build-ssh.sh
-RUN bash /build-ssh.sh /out
+# The [h] glob lets the build go on when public/ssh doesn't exist.
+COPY scripts/build-ssh.sh public/ss[h] /stage/
+RUN if [ -f /stage/hp_ssh.wasm ]; then mkdir -p /out; else bash /stage/build-ssh.sh /out; fi
 
 FROM node:22-alpine AS app
 

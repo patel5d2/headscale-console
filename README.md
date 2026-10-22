@@ -158,7 +158,7 @@ Requirements:
 - `ssh` rules in your policy that let the chosen user log in. *Access controls → Add rules → SSH into your own devices* is a good start.
 - A reverse proxy in front of the console must forward WebSocket upgrades (Caddy does by default), and the console must be served at the root of its domain.
 
-The default Docker build compiles the client in a Go build stage, which takes a few minutes and needs about 4 GB of free Docker disk space. To skip it, run `docker build --target app .`. Without Docker, run `scripts/build-ssh.sh` once (needs Go and git).
+Run `scripts/build-ssh.sh` once (needs Go and git). It puts the client in `public/ssh/`, which `node server.js` serves and the Docker build copies as is. If it's missing, the Docker build compiles it in a Go stage instead, which takes a few minutes and about 4 GB of free Docker disk space. To build without SSH, run `docker build --target app .`.
 
 ### Logs and one-click updates (host actions)
 

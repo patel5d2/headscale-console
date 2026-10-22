@@ -11,7 +11,7 @@ services:
       # Recommended: lock the console to your Headscale server. The login page
       # then only asks for the API key, and the proxy can't be pointed elsewhere.
       # Required for Browser SSH.
-      # HEADSCALE_URL: "https://headscale.example.com"
+      HEADSCALE_URL: "https://hs.dharmintech.org"
 
       # If HEADSCALE_URL is not set, optionally restrict which hosts can be entered.
       # ALLOWED_HEADSCALE_HOSTS: "headscale.example.com,192.168.0.50"

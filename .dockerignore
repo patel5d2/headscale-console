@@ -3,4 +3,3 @@ node_modules
 *.md
 docker-compose.yml
 deploy
-public/ssh
