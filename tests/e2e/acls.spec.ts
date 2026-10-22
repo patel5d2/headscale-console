@@ -182,6 +182,7 @@ test.describe('access controls', () => {
     await expect(card('Access rules').locator('tbody tr').last()).toContainText('tcp');
 
     const rowMenu = async (title: string, row: number, item: string) => {
+      await expect(page.getByRole('dialog')).toHaveCount(0); // closing dialogs linger briefly
       await card(title).locator('tbody tr').nth(row).getByRole('button', { name: 'More actions' }).click();
       await page.getByRole('menuitem', { name: item }).click();
     };
@@ -194,6 +195,7 @@ test.describe('access controls', () => {
     await expect(card('Access rules').locator('tbody tr')).toHaveCount(2);
 
     // SSH rules: add, switch check → accept, delete.
+    await expect(page.getByRole('dialog')).toHaveCount(0);
     await card('SSH rules').getByRole('button', { name: 'Add SSH rule' }).click();
     await d.getByLabel('Mode').selectOption('check');
     await d.locator('.chip-input-field').nth(0).fill('group:admins');
@@ -214,6 +216,7 @@ test.describe('access controls', () => {
     await expect(card('SSH rules')).toContainText('None yet.');
 
     // Groups: the prefix is added, names are checked, duplicates refused.
+    await expect(page.getByRole('dialog')).toHaveCount(0);
     await card('Groups').getByRole('button', { name: 'Add group' }).click();
     await d.getByLabel('Group name').fill('bad name');
     await apply();
@@ -236,6 +239,7 @@ test.describe('access controls', () => {
     await expect(card('Groups').locator('tbody tr')).toHaveCount(1);
 
     // Tag owners may be empty.
+    await expect(page.getByRole('dialog')).toHaveCount(0);
     await card('Tag owners').getByRole('button', { name: 'Add tag' }).click();
     await d.getByLabel('Tag').fill('web');
     await apply();
@@ -245,6 +249,7 @@ test.describe('access controls', () => {
     await expect(card('Tag owners')).toContainText('None yet.');
 
     // Hosts take one address.
+    await expect(page.getByRole('dialog')).toHaveCount(0);
     await card('Hosts').getByRole('button', { name: 'Add host' }).click();
     await d.getByLabel('Name', { exact: true }).fill('nas');
     await apply();
@@ -271,6 +276,7 @@ test.describe('access controls', () => {
     await tab(page, 'Policy file');
     await editor(page).fill('');
     await tab(page, 'Visual editor');
+    await expect(page.getByRole('dialog')).toHaveCount(0);
     await card('Hosts').getByRole('button', { name: 'Add host' }).click();
     await d.getByLabel('Name', { exact: true }).fill('nas');
     await d.getByLabel('Address or subnet').fill('10.0.0.1');
@@ -299,9 +305,9 @@ test.describe('access controls', () => {
 
     // SSH allowed by a check rule, but no network rule opens port 22.
     await tab(page, 'Policy file');
-    await editor(page).fill(JSON.stringify({ ssh: [{ action: 'check', src: ['alice@'], dst: ['autogroup:self'], users: ['root'] }] }));
+    await editor(page).fill(JSON.stringify({ ssh: [{ action: 'accept', src: ['alice@'], dst: ['tag:router'], users: ['root'] }] }));
     await tab(page, 'Access checker');
-    await page.getByLabel('To', { exact: true }).selectOption({ label: 'laptop — Alice Doe' });
+    await page.getByLabel('To', { exact: true }).selectOption({ label: 'router — tag:router' });
     await expect(out.nth(1)).toContainText('allowed by SSH rules, but TCP 22 is blocked');
     await tab(page, 'Policy file');
     await editor(page).fill(JSON.stringify({ acls: [{ action: 'accept', src: ['*'], dst: ['*:*'] }], ssh: [{ action: 'check', src: ['alice@'], dst: ['autogroup:self'], users: ['root'] }] }));
