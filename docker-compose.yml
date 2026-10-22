@@ -1,0 +1,32 @@
+services:
+  headscale-console:
+    build: .
+    image: headscale-console:latest
+    container_name: headscale-console
+    restart: unless-stopped
+    ports:
+      # Open http://<host>:8090 — change the left side if 8090 is taken.
+      - "8090:8080"
+    environment:
+      # Recommended: lock the console to your Headscale server. The login page
+      # then only asks for the API key, and the proxy can't be pointed elsewhere.
+      # HEADSCALE_URL: "https://headscale.example.com"
+
+      # If HEADSCALE_URL is not set, optionally restrict which hosts can be entered.
+      # ALLOWED_HEADSCALE_HOSTS: "headscale.example.com,192.168.0.50"
+
+      # Accept a self-signed certificate on the Headscale server.
+      # HEADSCALE_INSECURE_TLS: "true"
+      TZ: "America/New_York"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+
+    # If Headscale runs in Docker on the same host, join its network and use
+    # HEADSCALE_URL: "http://headscale:8080" instead of the public URL.
+    # networks: [headscale]
+
+# networks:
+#   headscale:
+#     external: true

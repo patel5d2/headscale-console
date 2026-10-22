@@ -1,0 +1,38 @@
+# systemd unit for running Headscale Console directly on a VM (no Docker).
+# Install:  sudo cp deploy/headscale-console.service /etc/systemd/system/
+#           sudo systemctl daemon-reload && sudo systemctl enable --now headscale-console
+[Unit]
+Description=Headscale Console (web admin UI)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=headscale-console
+Group=headscale-console
+WorkingDirectory=/opt/headscale-console
+ExecStart=/usr/bin/node /opt/headscale-console/server.js
+Environment=PORT=8090
+Environment=HOST=0.0.0.0
+# Environment=HEADSCALE_URL=https://headscale.example.com
+# Environment=HEADSCALE_INSECURE_TLS=true
+Restart=on-failure
+RestartSec=3
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+CapabilityBoundingSet=
+
+[Install]
+WantedBy=multi-user.target
