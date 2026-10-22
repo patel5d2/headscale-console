@@ -43,4 +43,6 @@ export const RELEASES_URL = env.HEADSCALE_RELEASES_URL || 'https://api.github.co
 // Audit log + policy history: on with a locked server unless AUDIT_LOG=false.
 export const DATA_DIR = env.DATA_DIR || (env.STATE_DIRECTORY ? env.STATE_DIRECTORY : path.resolve('data'));
 export const AUDIT_WANTED = !!LOCKED_URL && !falsy(env.AUDIT_LOG);
+/** The audit log rotates to audit.jsonl.1 past this size (default 10 MB). */
+export const AUDIT_MAX_BYTES = parseInt(env.AUDIT_MAX_BYTES || '', 10) || 10 * 1024 * 1024;
 //# sourceMappingURL=config.js.map

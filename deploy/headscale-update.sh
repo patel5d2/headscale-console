@@ -37,15 +37,17 @@ status() { # state message — messages are fixed strings, so this is valid JSON
 fetch_deb() { # version -> prints path of a checksum-verified .deb
   local v=$1 deb="headscale_${1}_linux_${ARCH}.deb" dir="$WORK/$1"
   mkdir -p "$dir"
-  curl -fsSL --proto '=https' --tlsv1.2 -o "$dir/$deb" "$REPO/v$v/$deb" &&
+  if ! { curl -fsSL --proto '=https' --tlsv1.2 -o "$dir/$deb" "$REPO/v$v/$deb" &&
     curl -fsSL --proto '=https' --tlsv1.2 -o "$dir/checksums.txt" "$REPO/v$v/checksums.txt" &&
-    (cd "$dir" && awk -v f="$deb" '$2 == f' checksums.txt | sha256sum -c --status) || {
-      echo "Download or checksum verification failed for $deb" >&2; return 1; }
+    (cd "$dir" && awk -v f="$deb" '$2 == f' checksums.txt | sha256sum -c --status); }; then
+    echo "Download or checksum verification failed for $deb" >&2
+    return 1
+  fi
   echo "$dir/$deb"
 }
 
 echo "Headscale update: ${FROM:-unknown} -> $VERSION ($(date -u +%FT%TZ))"
-if [[ $FROM == "$VERSION" ]]; then status done "Already on this version"; exit 0; fi
+if [[ $FROM == "$VERSION" ]]; then status "done" "Already on this version"; exit 0; fi
 status running "Downloading"
 
 # Phase 1: download + verify. Headscale is untouched if anything here fails.
@@ -73,7 +75,7 @@ fi
 if DEBIAN_FRONTEND=noninteractive dpkg --force-confold -i "$NEW_DEB" &&
    systemctl start "$UNIT" && sleep 8 && systemctl is-active --quiet "$UNIT"; then
   echo "Headscale $VERSION is running"
-  status done "Updated"
+  status "done" "Updated"
   exit 0
 fi
 

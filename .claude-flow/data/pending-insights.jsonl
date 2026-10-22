@@ -46,3 +46,10 @@
 {"type":"edit","file":"/Users/dharminpatel/Downloads/headscale-console/src/client/pages/ssh.ts","success":true,"timestamp":1792700502735,"sessionId":null}
 {"type":"edit","file":"/Users/dharminpatel/Downloads/headscale-console/src/client/pages/audit.ts","success":true,"timestamp":1792700503073,"sessionId":null}
 {"type":"edit","file":"/Users/dharminpatel/Downloads/headscale-console/src/client/theme-init.ts","success":true,"timestamp":1792700503397,"sessionId":null}
+{"type":"edit","file":"/Users/dharminpatel/Downloads/headscale-console/tests/support/fake-ssh/wasm_exec.js","success":true,"timestamp":1792700956032,"sessionId":null}
+{"type":"edit","file":"/Users/dharminpatel/Downloads/headscale-console/tests/support/env.ts","success":true,"timestamp":1792700956388,"sessionId":null}
+{"type":"edit","file":"/Users/dharminpatel/Downloads/headscale-console/tests/support/global-setup.ts","success":true,"timestamp":1792700956695,"sessionId":null}
+{"type":"edit","file":"/Users/dharminpatel/Downloads/headscale-console/tests/support/coverage.ts","success":true,"timestamp":1792701004805,"sessionId":null}
+{"type":"edit","file":"/Users/dharminpatel/Downloads/headscale-console/tests/support/fixtures.ts","success":true,"timestamp":1792701005135,"sessionId":null}
+{"type":"edit","file":"/Users/dharminpatel/Downloads/headscale-console/playwright.config.ts","success":true,"timestamp":1792701005441,"sessionId":null}
+{"type":"edit","file":"/Users/dharminpatel/Downloads/headscale-console/tests/e2e/login.spec.ts","success":true,"timestamp":1792701059772,"sessionId":null}

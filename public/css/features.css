@@ -1,0 +1,51 @@
+/* Styles for the Logs, Overview, policy diff, Browser SSH and bulk-action features. */
+
+/* Logs */
+button.stat { font: inherit; text-align: left; cursor: pointer; }
+.stat.active { border-color: var(--accent); background: var(--accent-soft); }
+.row-link { cursor: pointer; }
+.row-link:hover td { background: var(--surface-2); }
+.log-msg { font-family: var(--mono); font-size: 12px; white-space: pre-wrap; word-break: break-word; }
+
+/* Policy diff */
+.diff { font-family: var(--mono); font-size: 12.5px; border: 1px solid var(--border); border-radius: var(--radius); overflow-x: auto; background: var(--surface); }
+.diff-line { white-space: pre; padding: 0 12px; line-height: 1.6; }
+.diff-add { background: var(--success-soft); color: var(--success); }
+.diff-del { background: var(--danger-soft); color: var(--danger); }
+.diff-ctx { color: var(--text-2); }
+.diff-gap { padding: 2px 12px; color: var(--text-3); background: var(--surface-2); }
+
+/* Overview */
+.attention-list { display: flex; flex-direction: column; gap: 8px; }
+.attention { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--border); border-left-width: 3px; border-radius: var(--radius); background: var(--surface); color: var(--text); }
+.attention:hover { text-decoration: none; background: var(--surface-2); }
+.attention > div { flex: 1; min-width: 0; }
+.attention-title { font-weight: 550; }
+.attention-danger { border-left-color: var(--danger); } .attention-danger > .icon:first-child { color: var(--danger); }
+.attention-warning { border-left-color: var(--warning); } .attention-warning > .icon:first-child { color: var(--warning); }
+.attention-info { border-left-color: var(--accent); } .attention-info > .icon:first-child { color: var(--accent-text); }
+
+/* Browser SSH */
+.ssh-term { position: relative; height: calc(100vh - 340px); min-height: 320px; padding: 8px; background: #0b0d10; border-radius: 0 0 var(--radius) var(--radius); overflow: hidden; }
+.ssh-term:fullscreen { height: 100vh; border-radius: 0; }
+.ssh-term[hidden], .ssh-tabs[hidden], .ssh-tools[hidden] { display: none; }
+.ssh-pane { position: absolute; inset: 8px; }
+.ssh-pane[hidden] { display: none; }
+.ssh-status { margin-left: auto; }
+.ssh-tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
+.ssh-tools .input-sm { min-width: 160px; }
+.ssh-tabs { display: flex; gap: 2px; overflow-x: auto; background: var(--surface-2); border-radius: var(--radius) var(--radius) 0 0; padding: 4px 4px 0; }
+.ssh-tab { display: flex; align-items: center; border-radius: 6px 6px 0 0; background: var(--surface-3); color: var(--text-2); font-size: 12.5px; }
+.ssh-tab.active { background: #0b0d10; color: #e6e6e6; }
+.ssh-tab.done .ssh-tab-label { opacity: 0.6; text-decoration: line-through; }
+.ssh-tab button { background: none; border: 0; color: inherit; font: inherit; cursor: pointer; padding: 6px 8px; }
+.ssh-tab-x { padding-left: 2px !important; opacity: 0.7; }
+.ssh-tab-x:hover { opacity: 1; }
+
+/* Bulk actions */
+.col-check { width: 1%; }
+.bulk-bar { position: sticky; top: 8px; z-index: 5; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 12px; margin-bottom: 10px;
+  border: 1px solid var(--accent); border-radius: var(--radius); background: var(--accent-soft); }
+.bulk-bar[hidden] { display: none; }
+.bulk-bar strong { margin-right: 6px; }
+.toolbar .inline-label .input { width: auto; min-width: 140px; }

@@ -14,11 +14,10 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { requireApiKey } from './auth.js';
-import { AUDIT_WANTED, DATA_DIR } from './config.js';
+import { AUDIT_MAX_BYTES, AUDIT_WANTED, DATA_DIR } from './config.js';
 import { HttpError, log, sendJSON, upstreamGet } from './http.js';
 const AUDIT_FILE = path.join(DATA_DIR, 'audit.jsonl');
 const HISTORY_DIR = path.join(DATA_DIR, 'policy-history');
-const MAX_AUDIT_BYTES = 10 * 1024 * 1024; // then rotate to audit.jsonl.1 (one old file kept)
 const MAX_VERSIONS = 200;
 const ID_RE = /^\d{8}T\d{9}Z-[A-Za-z0-9_-]{1,32}\.hujson$/;
 const SECRET_FIELD = /^(key|apikey|authkey|secret|password|token)$/i;
@@ -70,9 +69,8 @@ export function record(entry) {
     if (!AUDIT_ENABLED)
         return;
     try {
-        if (fs.existsSync(AUDIT_FILE) && fs.statSync(AUDIT_FILE).size > MAX_AUDIT_BYTES)
-            fs.renameSync(AUDIT_FILE, AUDIT_FILE + '.1');
-        fs.appendFileSync(AUDIT_FILE, JSON.stringify(entry) + '\n', { mode: 0o600 });
+        if (fs.existsSync(AUDIT_FILE) && fs.statSync(AUDIT_FILE).size > AUDIT_MAX_BYTES) // keep one old file fs.renameSync(AUDIT_FILE, AUDIT_FILE + '.1');
+            fs.appendFileSync(AUDIT_FILE, JSON.stringify(entry) + '\n', { mode: 0o600 });
     }
     catch (e) {
         log(`Could not write the audit log: ${e.message}`);

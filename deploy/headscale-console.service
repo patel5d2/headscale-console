@@ -1,6 +1,5 @@
 # systemd unit for running Headscale Console directly on a VM (no Docker).
-# Install:  sudo cp deploy/headscale-console.service /etc/systemd/system/
-#           sudo systemctl daemon-reload && sudo systemctl enable --now headscale-console
+# Installed and configured by deploy/install-vm.sh.
 [Unit]
 Description=Headscale Console (web admin UI)
 After=network-online.target
@@ -11,7 +10,7 @@ Type=simple
 User=headscale-console
 Group=headscale-console
 WorkingDirectory=/opt/headscale-console
-ExecStart=/usr/bin/node /opt/headscale-console/server.js
+ExecStart=/usr/bin/node /opt/headscale-console/dist/server/server.js
 Environment=PORT=8090
 Environment=HOST=0.0.0.0
 # Environment=HEADSCALE_URL=https://headscale.example.com
@@ -21,7 +20,8 @@ Environment=HOST=0.0.0.0
 # Environment=HEADSCALE_UNIT=headscale
 # Read Headscale's journal without any other privilege.
 SupplementaryGroups=systemd-journal
-# /var/lib/headscale-console: the only place the console can write (update requests).
+# /var/lib/headscale-console: the only place the console can write (audit log, policy
+# history, update requests). systemd passes it as $STATE_DIRECTORY.
 StateDirectory=headscale-console
 StateDirectoryMode=0700
 Restart=on-failure
