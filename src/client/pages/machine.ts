@@ -1,3 +1,6 @@
+import type { ApiError } from '../api.js';
+import type { Node } from '../../shared/types.js';
+import type { Ctx } from '../types.js';
 import { h, put, icon, button, badge, statusDot, moreButton, errorState, spinner, clear, copyable, kv, toggle, avatar, callout } from '../ui.js';
 import {
   nodeName, nodeTags, nodeIPv4, nodeIPv6, expiryState, routeInfo, ownerLabel, relTime, fmtDate, parseTime,
@@ -6,7 +9,7 @@ import {
 import { nodeMenuItems, renameNode, editRoutes, editTags, setExpiry, disableExpiry, expireNow, deleteNode, magicName, setRouteApproved } from './actions.js';
 import { nodeBadges } from './machines.js';
 
-export async function render(ctx, { id }, root) {
+export async function render(ctx: Ctx, { id = '' }: Record<string, string | undefined>, root: HTMLElement): Promise<() => void> {
   let destroyed = false;
   const body = h('div', h('div', { class: 'center pad-y' }, spinner(24)));
   root.append(
@@ -14,24 +17,25 @@ export async function render(ctx, { id }, root) {
       h('a', { href: '#/machines' }, icon('chevronLeft', 14), 'All machines')),
     body);
 
-  async function load() {
+  async function load(): Promise<void> {
     try {
       const n = await ctx.api.getNode(id);
       if (destroyed) return;
       draw(n);
     } catch (e) {
       if (destroyed) return;
-      clear(body).appendChild(e.status === 404 || /not found/i.test(e.message)
+      const err = e as ApiError;
+      clear(body).appendChild(err.status === 404 || /not found/i.test(err.message)
         ? h('div', { class: 'empty' }, h('div', { class: 'empty-title' }, 'Machine not found'),
           h('div', { class: 'empty-text' }, 'It may have been removed.'),
           button('Back to machines', { onClick: () => ctx.navigate('#/machines') }))
-        : errorState(e, load));
+        : errorState(e, () => void load()));
     }
   }
 
-  const after = () => { ctx.invalidate(); load(); };
+  const after = (): void => { ctx.invalidate(); void load(); };
 
-  function draw(n) {
+  function draw(n: Node): void {
     const st = expiryState(n);
     const ri = routeInfo(n);
     const owner = ownerLabel(n);
@@ -54,7 +58,7 @@ export async function render(ctx, { id }, root) {
       h('div', { class: 'page-actions' },
         ctx.config.browserSsh ? button('SSH', { icon: 'terminal', onClick: () => ctx.navigate(`#/ssh/${n.id}`) }) : null,
         button('Edit name', { icon: 'edit', onClick: () => renameNode(ctx, n, after) }),
-        moreButton(() => nodeMenuItems(ctx, n, () => { ctx.invalidate(); load(); }, { includeView: false }))));
+        moreButton(() => nodeMenuItems(ctx, n, after, { includeView: false }))));
 
     // ------------------------------------------------------------- details
     const details = h('section', { class: 'card' },
@@ -68,7 +72,7 @@ export async function render(ctx, { id }, root) {
         ['Node ID', copyable(String(n.id))],
         ['Created', h('span', { title: fmtDate(n.createdAt) }, `${fmtDate(n.createdAt)} (${relTime(n.createdAt)})`)],
         ['Last seen', n.online ? h('span', { class: 'seen' }, statusDot(true), 'Connected now') : (seen ? `${fmtDate(seen)} (${relTime(seen)})` : 'Never')],
-        ['Registered via', REGISTER_METHOD[n.registerMethod] || '—'],
+        ['Registered via', REGISTER_METHOD[n.registerMethod || ''] || '—'],
         n.preAuthKey ? ['Auth key', h('span', `#${n.preAuthKey.id}`, n.preAuthKey.reusable ? ' · reusable' : '', n.preAuthKey.ephemeral ? ' · ephemeral' : '')] : null,
       ]));
 
@@ -94,21 +98,21 @@ export async function render(ctx, { id }, root) {
                 : `The device must re-authenticate on ${fmtDate(st.date)}.`)),
           toggle(!st.disabled, (on, input) => {
             input.checked = !on; // wait for the action to refresh
-            on ? setExpiry(ctx, n, after) : disableExpiry(ctx, n, after);
+            void (on ? setExpiry(ctx, n, after) : disableExpiry(ctx, n, after));
           }, { label: 'Expiry' })),
         h('div', { class: 'row-gap' },
           !st.disabled ? button('Change expiry date', { size: 'sm', icon: 'clock', onClick: () => setExpiry(ctx, n, after) }) : null,
           button('Expire key now', { size: 'sm', icon: 'lock', onClick: () => expireNow(ctx, n, after) }))));
 
     // ------------------------------------------------------------- routes
-    const routeRows = [];
+    const routeRows: HTMLTableRowElement[] = [];
     for (const r of ri.subnets) {
       const approved = ri.approved.includes(r);
       routeRows.push(h('tr',
         h('td', { class: 'mono' }, r),
         h('td', ri.available.includes(r) ? 'Advertised' : h('span', { class: 'muted' }, 'Pre-approved')),
         h('td', !ri.available.includes(r) ? badge('Not advertised', 'neutral') : ri.primary.includes(r) ? badge('Primary', 'success') : (approved ? badge('Standby', 'neutral') : badge('Pending', 'warning'))),
-        h('td', { class: 'col-actions' }, toggle(approved, (on) => setRouteApproved(ctx, n, r, on, after), { label: approved ? 'Approved' : 'Approve' }))));
+        h('td', { class: 'col-actions' }, toggle(approved, (on) => void setRouteApproved(ctx, n, r, on, after), { label: approved ? 'Approved' : 'Approve' }))));
     }
     const routes = h('section', { class: 'card' },
       h('div', { class: 'card-head' }, h('h2', 'Subnets & exit node'),
@@ -121,7 +125,7 @@ export async function render(ctx, { id }, root) {
               : ri.exitAdvertised ? 'This machine is offering to be an exit node. Approve it to allow others to use it.'
                 : 'Not advertised. Run tailscale set --advertise-exit-node on the device.')),
           ri.exitAdvertised || ri.exitApproved
-            ? toggle(ri.exitApproved, (on) => setRouteApproved(ctx, n, '0.0.0.0/0', on, after), { label: ri.exitApproved ? 'Allowed' : 'Allow' })
+            ? toggle(ri.exitApproved, (on) => void setRouteApproved(ctx, n, '0.0.0.0/0', on, after), { label: ri.exitApproved ? 'Allowed' : 'Allow' })
             : badge('Not advertised', 'neutral')),
         routeRows.length
           ? h('div', { class: 'table-wrap flat' }, h('table', { class: 'table' },
@@ -149,7 +153,7 @@ export async function render(ctx, { id }, root) {
       h('div', { class: 'card-head' }, h('h2', 'Remove machine')),
       h('div', { class: 'card-body setting-row' },
         h('p', { class: 'help' }, 'Removing the machine disconnects it and releases its IP addresses. It must be registered again to rejoin.'),
-        button('Remove…', { variant: 'danger', icon: 'trash', onClick: () => deleteNode(ctx, n, () => ctx.navigate('#/machines')) })));
+        button('Remove…', { variant: 'danger', icon: 'trash', onClick: () => void deleteNode(ctx, n, () => ctx.navigate('#/machines')) })));
 
     const pending = ri.pendingSubnets.length || ri.exitPending;
     put(clear(body),
@@ -162,14 +166,14 @@ export async function render(ctx, { id }, root) {
         h('div', { class: 'stack' }, addresses, expiry, keys, danger)));
   }
 
-  function shorten(k) {
+  function shorten(k?: string): string {
     if (!k) return '—';
-    const [pfx, hex] = k.includes(':') ? k.split(':') : ['', k];
+    const [pfx, hex = ''] = k.includes(':') ? k.split(':') : ['', k];
     return `${pfx ? pfx + ':' : ''}${hex.slice(0, 8)}…${hex.slice(-6)}`;
   }
 
   await load();
-  const t = setInterval(() => { if (!document.hidden) load(); }, 20000);
+  const t = setInterval(() => { if (!document.hidden) void load(); }, 20000);
   return () => { destroyed = true; clearInterval(t); };
 }
 

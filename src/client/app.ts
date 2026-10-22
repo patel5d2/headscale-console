@@ -1,69 +1,66 @@
 // App shell: connection state, data cache, router, header/navigation.
-import { HeadscaleAPI } from './api.js';
-import { h, clear, icon, logo, showMenu, toast, spinner } from './ui.js';
-import { store, hostOf, applyTheme } from './util.js';
-import * as login from './pages/login.js';
-import * as overview from './pages/overview.js';
-import * as machines from './pages/machines.js';
-import * as machine from './pages/machine.js';
-import * as routesPage from './pages/routes.js';
-import * as users from './pages/users.js';
+import { ConsoleAPI } from './api.js';
 import * as acls from './pages/acls.js';
+import * as audit from './pages/audit.js';
 import * as dns from './pages/dns.js';
+import * as login from './pages/login.js';
 import * as logs from './pages/logs.js';
-import * as ssh from './pages/ssh.js';
+import * as machine from './pages/machine.js';
+import * as machines from './pages/machines.js';
+import * as overview from './pages/overview.js';
+import * as routesPage from './pages/routes.js';
 import * as settings from './pages/settings.js';
+import * as ssh from './pages/ssh.js';
+import * as users from './pages/users.js';
+import type { AppCtx, ConsoleConfig, Conn, Ctx, PageRender } from './types.js';
+import { clear, h, icon, logo, showMenu, spinner, toast } from './ui.js';
+import { applyTheme, hostOf, store } from './util.js';
 
-const root = document.getElementById('app');
+const root = document.getElementById('app')!;
 
-// ----------------------------------------------------------------- theme --
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => applyTheme());
 applyTheme();
 
-// ------------------------------------------------------------------- ctx --
-const ctx = {
-  config: { lockedUrl: null },
+// --------------------------------------------------------------------- ctx --
+let loading: Promise<{ users: NonNullable<AppCtx['data']['users']>; nodes: NonNullable<AppCtx['data']['nodes']> }> | null = null;
+
+const ctx: AppCtx = {
+  config: { lockedUrl: null, allowedHosts: [] },
   api: null,
-  conn: null, // { url, key, remember }
+  conn: null,
   server: { version: null },
-  data: {
-    users: null,
-    nodes: null,
-    loadedAt: 0,
-  },
+  data: { users: null, nodes: null, loadedAt: 0 },
   prefs: {
     get baseDomain() { return store.get('baseDomain', ''); },
-    set baseDomain(v) { store.set('baseDomain', v); },
+    set baseDomain(v: string) { store.set('baseDomain', v); },
   },
-  // Load (or reuse) users + nodes. force=true always refetches.
+  /** Loads (or reuses) users + nodes. force=true always refetches. */
   async load(force = false) {
-    if (!force && this.data.nodes && this.data.users && Date.now() - this.data.loadedAt < 4000) return this.data;
-    if (this._loading) return this._loading;
-    this._loading = (async () => {
+    const { users: u, nodes: n, loadedAt } = this.data;
+    if (!force && u && n && Date.now() - loadedAt < 4000) return { users: u, nodes: n };
+    loading ??= (async () => {
       try {
-        const [users, nodes] = await Promise.all([this.api.listUsers(), this.api.listNodes()]);
-        this.data.users = users;
-        this.data.nodes = nodes;
-        this.data.loadedAt = Date.now();
+        const [users, nodes] = await Promise.all([this.api!.listUsers(), this.api!.listNodes()]);
+        this.data = { users, nodes, loadedAt: Date.now() };
         updateNavCounts();
-        return this.data;
+        return { users, nodes };
       } finally {
-        this._loading = null;
+        loading = null;
       }
     })();
-    return this._loading;
+    return loading;
   },
   invalidate() { this.data.loadedAt = 0; },
-  navigate(hash) { if (location.hash !== hash) location.hash = hash; else route(); },
-  rerender() { route(); },
+  navigate(hash) { if (location.hash !== hash) location.hash = hash; else void route(); },
+  rerender() { void route(); },
   disconnect,
   connect,
 };
 
-function makeApi(conn) {
-  const api = new HeadscaleAPI({
-    url: ctx.config.lockedUrl ? '' : conn.url,
+function makeApi(conn: Conn): ConsoleAPI {
+  const api: ConsoleAPI = new ConsoleAPI({
     key: conn.key,
+    ...(ctx.config.lockedUrl ? {} : { url: conn.url }),
     onUnauthorized: (msg) => {
       // Only sign out a session that was connected; login attempts show their own error.
       if (ctx.api !== api) return;
@@ -74,10 +71,9 @@ function makeApi(conn) {
   return api;
 }
 
-async function connect(conn) {
+async function connect(conn: Conn): Promise<void> {
   const api = makeApi(conn);
-  // Validate credentials: listing users needs a valid API key.
-  await api.listUsers();
+  await api.listUsers(); // validates the key
   ctx.api = api;
   ctx.conn = conn;
   store.set('conn', conn, !!conn.remember); // localStorage if remembered, else this tab only
@@ -86,18 +82,18 @@ async function connect(conn) {
   ctx.data = { users: null, nodes: null, loadedAt: 0 };
 }
 
-function disconnect(expired = false) {
+function disconnect(expired = false): void {
   store.del('conn');
   ctx.api = null;
-  ctx.conn = expired ? { ...(ctx.conn || {}), key: '' } : null;
+  ctx.conn = expired && ctx.conn ? { ...ctx.conn, key: '' } : null;
   ctx.data = { users: null, nodes: null, loadedAt: 0 };
-  if (expired && ctx.conn?.url) store.set('lastUrl', ctx.conn.url);
   location.hash = '#/login';
-  route();
+  void route();
 }
 
-// ---------------------------------------------------------------- router --
-const ROUTES = [
+// ------------------------------------------------------------------ router --
+interface Route { re: RegExp; page: { render: PageRender }; nav?: string; params?: string[]; public?: boolean }
+const ROUTES: Route[] = [
   { re: /^\/login$/, page: login, public: true },
   { re: /^\/overview$/, page: overview, nav: 'overview' },
   { re: /^\/machines$/, page: machines, nav: 'machines' },
@@ -107,6 +103,7 @@ const ROUTES = [
   { re: /^\/acls$/, page: acls, nav: 'acls' },
   { re: /^\/dns$/, page: dns, nav: 'dns' },
   { re: /^\/logs$/, page: logs, nav: 'logs' },
+  { re: /^\/audit$/, page: audit, nav: 'audit' },
   { re: /^\/ssh\/([^/]+)$/, page: ssh, nav: 'machines', params: ['id'] },
   { re: /^\/settings(?:\/([a-z-]+))?$/, page: settings, nav: 'settings', params: ['section'] },
 ];
@@ -119,50 +116,46 @@ const NAV = [
   { id: 'acls', label: 'Access controls', href: '#/acls' },
   { id: 'dns', label: 'DNS', href: '#/dns' },
   { id: 'logs', label: 'Logs', href: '#/logs' },
+  { id: 'audit', label: 'Audit', href: '#/audit' },
   { id: 'settings', label: 'Settings', href: '#/settings' },
 ];
 
-let shell = null; // { header, main, navLinks }
-let cleanup = null;
+let shell: { main: HTMLElement; navLinks: Record<string, HTMLAnchorElement> } | null = null;
+let cleanup: (() => void) | null = null;
 let routeToken = 0;
 
-function updateNavCounts() {
-  if (!shell) return;
-  const pending = (ctx.data.nodes || []).reduce((n, x) =>
-    n + (x.availableRoutes || []).filter((r) => !(x.approvedRoutes || []).includes(r)).length, 0);
-  const el = shell.navLinks.routes?.querySelector('.nav-badge');
-  if (el) {
-    el.textContent = pending || '';
-    el.hidden = !pending;
-    el.title = pending ? `${pending} route${pending === 1 ? '' : 's'} awaiting approval` : '';
-  }
+function updateNavCounts(): void {
+  const el = shell?.navLinks.routes?.querySelector<HTMLElement>('.nav-badge');
+  if (!el) return;
+  const pending = (ctx.data.nodes || []).reduce((n, x) => n + (x.availableRoutes || []).filter((r) => !(x.approvedRoutes || []).includes(r)).length, 0);
+  el.textContent = pending ? String(pending) : '';
+  el.hidden = !pending;
+  el.title = pending ? `${pending} route${pending === 1 ? '' : 's'} awaiting approval` : '';
 }
 
-function buildShell() {
-  const navLinks = {};
+function buildShell(): NonNullable<typeof shell> {
+  const navLinks: Record<string, HTMLAnchorElement> = {};
   const nav = h('nav', { class: 'nav', 'aria-label': 'Main' },
     NAV.map((n) => (navLinks[n.id] = h('a', { href: n.href, class: 'nav-link' }, n.label,
       n.id === 'routes' ? h('span', { class: 'nav-badge', hidden: true }) : null))));
 
   const themeBtn = h('button', { class: 'icon-btn', type: 'button', title: 'Theme', 'aria-label': 'Change theme' });
-  const setThemeIcon = () => {
-    clear(themeBtn).appendChild(icon(document.documentElement.dataset.theme === 'dark' ? 'moon' : 'sun', 18));
-  };
+  const setThemeIcon = (): void => { clear(themeBtn).appendChild(icon(document.documentElement.dataset.theme === 'dark' ? 'moon' : 'sun', 18)); };
   setThemeIcon();
   themeBtn.addEventListener('click', () => {
-    const cur = store.get('theme', 'system');
+    const cur = store.get<string>('theme', 'system');
+    const pick = (t: string) => (): void => { store.set('theme', t); applyTheme(); setThemeIcon(); };
     showMenu(themeBtn, [
       { header: 'Appearance' },
-      { label: 'Light', icon: cur === 'light' ? 'check' : null, onClick: () => { store.set('theme', 'light'); applyTheme(); setThemeIcon(); } },
-      { label: 'Dark', icon: cur === 'dark' ? 'check' : null, onClick: () => { store.set('theme', 'dark'); applyTheme(); setThemeIcon(); } },
-      { label: 'System', icon: cur === 'system' ? 'check' : null, onClick: () => { store.set('theme', 'system'); applyTheme(); setThemeIcon(); } },
+      { label: 'Light', icon: cur === 'light' ? 'check' : null, onClick: pick('light') },
+      { label: 'Dark', icon: cur === 'dark' ? 'check' : null, onClick: pick('dark') },
+      { label: 'System', icon: cur === 'system' ? 'check' : null, onClick: pick('system') },
     ]);
   });
 
-  const host = ctx.config.lockedUrl ? hostOf(ctx.config.lockedUrl) : hostOf(ctx.conn.url);
+  const host = hostOf(ctx.config.lockedUrl || ctx.conn!.url);
   const acct = h('button', { class: 'account-btn', type: 'button', 'aria-label': 'Account' },
-    h('span', { class: 'account-avatar' }, icon('server', 15)),
-    h('span', { class: 'account-host' }, host), icon('chevronDown', 14));
+    h('span', { class: 'account-avatar' }, icon('server', 15)), h('span', { class: 'account-host' }, host), icon('chevronDown', 14));
   acct.addEventListener('click', () => {
     const v = ctx.server.version?.version;
     showMenu(acct, [
@@ -175,110 +168,103 @@ function buildShell() {
     ]);
   });
 
-  const header = h('header', { class: 'topbar' },
-    h('div', { class: 'topbar-inner' },
-      h('a', { class: 'brand', href: '#/machines' }, logo(22),
-        h('span', { class: 'brand-text' }, h('span', { class: 'brand-name' }, 'Headscale'), h('span', { class: 'brand-tailnet' }, host))),
-      h('div', { class: 'topbar-actions' }, themeBtn, acct)),
-    h('div', { class: 'nav-wrap' }, nav));
-
   const main = h('main', { class: 'main', id: 'main', tabindex: '-1' });
-  const footer = h('footer', { class: 'footer' },
-    h('span', 'Headscale Console'),
-    ctx.server.version?.version ? h('span', `Server ${ctx.server.version.version}`) : null,
-    h('a', { href: 'https://headscale.net/stable/', target: '_blank', rel: 'noopener' }, 'Headscale docs'));
-
-  clear(root);
-  root.appendChild(h('a', { class: 'skip-link', href: '#main', onclick: (e) => { e.preventDefault(); main.focus(); } }, 'Skip to content'));
-  root.appendChild(header);
-  root.appendChild(main);
-  root.appendChild(footer);
-  shell = { header, main, navLinks };
+  clear(root).append(
+    h('a', { class: 'skip-link', href: '#main', onclick: (e) => { e.preventDefault(); main.focus(); } }, 'Skip to content'),
+    h('header', { class: 'topbar' },
+      h('div', { class: 'topbar-inner' },
+        h('a', { class: 'brand', href: '#/overview' }, logo(22),
+          h('span', { class: 'brand-text' }, h('span', { class: 'brand-name' }, 'Headscale'), h('span', { class: 'brand-tailnet' }, host))),
+        h('div', { class: 'topbar-actions' }, themeBtn, acct)),
+      h('div', { class: 'nav-wrap' }, nav)),
+    main,
+    h('footer', { class: 'footer' },
+      h('span', 'Headscale Console'),
+      ctx.server.version?.version ? h('span', `Server ${ctx.server.version.version}`) : '',
+      h('a', { href: 'https://headscale.net/stable/', target: '_blank', rel: 'noopener' }, 'Headscale docs')));
+  return { main, navLinks };
 }
 
-export async function route() {
+export async function route(): Promise<void> {
   const token = ++routeToken;
-  const path = (location.hash || '#/machines').replace(/^#/, '') || '/machines';
-  let match = null;
-  let params = {};
+  const path = location.hash.replace(/^#/, '') || '/overview';
+  let match: Route | undefined;
+  const params: Record<string, string | undefined> = {};
   for (const r of ROUTES) {
     const m = path.match(r.re);
-    if (m) {
-      match = r;
-      (r.params || []).forEach((p, i) => { params[p] = m[i + 1] ? decodeURIComponent(m[i + 1]) : undefined; });
-      break;
-    }
+    if (!m) continue;
+    match = r;
+    (r.params || []).forEach((p, i) => { params[p] = m[i + 1] ? decodeURIComponent(m[i + 1]!) : undefined; });
+    break;
   }
-  if (!match) { location.replace('#/machines'); return; }
+  if (!match) { location.replace('#/overview'); return; }
 
-  if (cleanup) { try { cleanup(); } catch { /* */ } cleanup = null; }
-
+  if (cleanup) { try { cleanup(); } catch { /* a page's cleanup must not block navigation */ } cleanup = null; }
   if (!ctx.api && !match.public) { location.replace('#/login'); return; }
-  if (ctx.api && match.public) { location.replace('#/machines'); return; }
+  if (ctx.api && match.public) { location.replace('#/overview'); return; }
 
   if (match.public) {
     shell = null;
-    clear(root);
-    cleanup = await match.page.render(ctx, params, root);
+    cleanup = (await match.page.render(ctx as Ctx, params, clear(root))) || null;
     return;
   }
 
-  if (!shell) buildShell();
+  shell ??= buildShell();
   for (const [id, a] of Object.entries(shell.navLinks)) {
     a.classList.toggle('active', id === match.nav);
     if (id === match.nav) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current');
   }
-  const main = shell.main;
-  clear(main);
   const pageEl = h('div', { class: 'page' });
-  main.appendChild(pageEl);
+  clear(shell.main).appendChild(pageEl);
   window.scrollTo(0, 0);
+  document.title = `${NAV.find((n) => n.id === match!.nav)?.label || 'Headscale'} · Headscale Console`;
   try {
-    const c = await match.page.render(ctx, params, pageEl);
+    const c = await match.page.render(ctx as Ctx, params, pageEl);
     if (token !== routeToken) { if (typeof c === 'function') c(); return; }
     cleanup = typeof c === 'function' ? c : null;
   } catch (e) {
     console.error(e);
-    pageEl.appendChild(h('div', { class: 'callout callout-error' }, icon('alert', 18), h('div', String(e.message || e))));
+    pageEl.appendChild(h('div', { class: 'callout callout-error' }, icon('alert', 18), h('div', String((e as Error).message || e))));
   }
-  document.title = `${NAV.find((n) => n.id === match.nav)?.label || 'Headscale'} · Headscale Console`;
 }
 
-window.addEventListener('hashchange', route);
+window.addEventListener('hashchange', () => void route());
 
-// Global keyboard shortcuts
+// Global keyboard shortcuts: "/" focuses search, "g" then a letter navigates.
+const GO: Record<string, string> = {
+  o: '#/overview', m: '#/machines', u: '#/users', a: '#/acls', d: '#/dns', l: '#/logs', s: '#/settings', r: '#/routes', k: '#/settings/keys', h: '#/audit',
+};
+let gPressed = 0;
 document.addEventListener('keydown', (e) => {
-  if (e.target.closest('input, textarea, select, [contenteditable]')) return;
+  if ((e.target as Element).closest('input, textarea, select, [contenteditable]')) return;
   if (e.key === '/' && !e.metaKey && !e.ctrlKey) {
-    const s = document.querySelector('[data-search]');
+    const s = document.querySelector<HTMLElement>('[data-search]');
     if (s) { e.preventDefault(); s.focus(); }
   }
   if (!ctx.api || e.metaKey || e.ctrlKey || e.altKey) return;
-  if (e.key === 'g') { ctx._g = Date.now(); return; }
-  if (ctx._g && Date.now() - ctx._g < 800) {
-    const map = { o: '#/overview', m: '#/machines', u: '#/users', a: '#/acls', d: '#/dns', l: '#/logs', s: '#/settings', r: '#/routes', k: '#/settings/keys' };
-    if (map[e.key]) { ctx.navigate(map[e.key]); ctx._g = 0; }
-  }
+  if (e.key === 'g') { gPressed = Date.now(); return; }
+  const to = GO[e.key];
+  if (to && Date.now() - gPressed < 800) { ctx.navigate(to); gPressed = 0; }
 });
 
-// ----------------------------------------------------------------- boot --
-(async function boot() {
+// ------------------------------------------------------------------- boot --
+void (async function boot() {
   clear(root).appendChild(h('div', { class: 'boot' }, spinner(28)));
   try {
     const r = await fetch('console-config.json', { cache: 'no-store' });
-    if (r.ok) ctx.config = await r.json();
+    if (r.ok) ctx.config = await r.json() as ConsoleConfig;
   } catch { /* running without server config */ }
 
-  const saved = store.get('conn');
+  const saved = store.get<Conn | null>('conn', null);
   if (saved?.key && (saved.url || ctx.config.lockedUrl)) {
     try {
       await connect(saved);
     } catch (e) {
       ctx.conn = { ...saved, key: '' };
-      ctx.loginError = `Could not reconnect: ${e.message}`;
+      ctx.loginError = `Could not reconnect: ${(e as Error).message}`;
     }
   }
-  route();
+  await route();
 })();
 
 export { ctx };

@@ -1,36 +1,38 @@
 // Overview: tailnet stats plus a "needs attention" list of things an admin should act on.
-import { h, put, icon, badge, spinner, errorState, clear } from '../ui.js';
-import { nodeName, nodeTags, routeInfo, expiryState, parseTime, relTime, parseHuJSON, pluralize } from '../util.js';
+import type { Policy } from '../../shared/types.js';
+import type { Ctx } from '../types.js';
+import type { IconName } from '../ui.js';
+import { badge, clear, errorState, h, icon, put, spinner } from '../ui.js';
+import { cmpVersion, expiryState, nodeName, nodeTags, parseHuJSON, parseTime, pluralize, relTime, routeInfo, semver } from '../util.js';
 
 const DAY = 86400000;
 const SOON = 14 * DAY;
 
-const semver = (v) => String(v || '').replace(/^v/, '').match(/^\d+\.\d+\.\d+/)?.[0] || null;
-const newer = (a, b) => { const x = a.split('.').map(Number); const y = b.split('.').map(Number); return (x[0] - y[0] || x[1] - y[1] || x[2] - y[2]) > 0; };
+type Kind = 'danger' | 'warning' | 'info' | 'neutral';
+interface Item { kind: Kind; text: string; href: string; detail?: string }
+const ICONS: Record<Kind, IconName> = { danger: 'alert', warning: 'alert', info: 'info', neutral: 'clock' };
 
-export async function render(ctx, _params, root) {
+export async function render(ctx: Ctx, _params: unknown, root: HTMLElement): Promise<void> {
   root.append(h('div', { class: 'page-head' }, h('div', h('h1', 'Overview'), h('p', { class: 'muted' }, 'Your tailnet at a glance, and what needs attention.'))));
   const body = h('div', h('div', { class: 'center pad-y' }, spinner(24)));
   root.append(body);
 
-  let data;
-  let extra;
+  let data: Awaited<ReturnType<Ctx['load']>>;
+  let policy, apiKeys, releases, version;
   try {
-    [data, extra] = await Promise.all([ctx.load(true), Promise.all([
+    [data, [policy, apiKeys, releases, version]] = await Promise.all([ctx.load(true), Promise.all([
       ctx.api.getPolicy().catch(() => null),
       ctx.api.listApiKeys().catch(() => []),
       ctx.api.releases().catch(() => []),
       ctx.api.version(),
     ])]);
   } catch (e) { clear(body).append(errorState(e)); return; }
-  const [policy, apiKeys, releases, version] = extra;
-  const nodes = data.nodes || [];
-  const users = data.users || [];
+  const { nodes, users } = data;
   const now = Date.now();
 
-  // ------------------------------------------------------------ attention --
-  const items = [];
-  const add = (kind, text, href, detail) => items.push({ kind, text, href, detail });
+  // -------------------------------------------------------------- attention --
+  const items: Item[] = [];
+  const add = (kind: Kind, text: string, href: string, detail?: string): void => { items.push({ kind, text, href, ...(detail ? { detail } : {}) }); };
 
   const pending = nodes.filter((n) => { const r = routeInfo(n); return r.pendingSubnets.length || r.exitPending; });
   if (pending.length) add('warning', `${pluralize(pending.length, 'machine')} waiting for route approval`, '#/routes', pending.map(nodeName).join(', '));
@@ -38,37 +40,37 @@ export async function render(ctx, _params, root) {
   for (const n of nodes) {
     const e = expiryState(n);
     if (e.expired) add('danger', `${nodeName(n)}: key expired`, `#/machines/${n.id}`, 'It can\'t connect until it re-authenticates.');
-    else if (e.date && e.date - now < SOON) add('warning', `${nodeName(n)}: key expires ${relTime(e.date)}`, `#/machines/${n.id}`, 'Extend or disable its key expiry.');
+    else if (e.date && e.date.getTime() - now < SOON) add('warning', `${nodeName(n)}: key expires ${relTime(e.date)}`, `#/machines/${n.id}`, 'Extend or disable its key expiry.');
   }
 
-  const stale = nodes.filter((n) => !n.online && parseTime(n.lastSeen) && now - parseTime(n.lastSeen) > 30 * DAY);
+  const stale = nodes.filter((n) => { const seen = parseTime(n.lastSeen); return !n.online && !!seen && now - seen.getTime() > 30 * DAY; });
   if (stale.length) add('neutral', `${pluralize(stale.length, 'machine')} not seen for over 30 days`, '#/machines', stale.map(nodeName).join(', '));
 
-  const parsed = policy?.policy ? parseHuJSON(policy.policy) : null;
-  if (parsed?.ok) {
+  const parsed = parseHuJSON<Policy>(policy?.policy || '{}');
+  if (parsed.ok) {
     const owners = parsed.value?.tagOwners || {};
     const undefinedTags = [...new Set(nodes.flatMap(nodeTags))].filter((t) => !(t in owners));
     if (undefinedTags.length) add('warning', `${pluralize(undefinedTags.length, 'tag')} in use but not in tagOwners`, '#/acls', `${undefinedTags.join(', ')} — no rule can match them.`);
   }
 
   const current = ctx.conn?.key || '';
-  const myKey = apiKeys.find((k) => { const pfx = (k.prefix || '').replace(/\*+$/, '').replace(/-$/, ''); return pfx && current.startsWith(pfx); });
+  const myKey = apiKeys.find((k) => { const pfx = (k.prefix || '').replace(/\*+$/, '').replace(/-$/, ''); return !!pfx && current.startsWith(pfx); });
   const myExp = parseTime(myKey?.expiration);
-  if (myExp && myExp - now < SOON) add('warning', `This console's API key expires ${relTime(myExp)}`, '#/settings/api-keys', 'Create a new key before it runs out.');
+  if (myExp && myExp.getTime() - now < SOON) add('warning', `This console's API key expires ${relTime(myExp)}`, '#/settings/api-keys', 'Create a new key before it runs out.');
 
   const running = semver(version?.version);
-  if (running && releases[0] && newer(releases[0].version, running)) {
-    add('info', `Headscale ${releases[0].version} is available (running ${running})`, '#/settings/updates', 'Read the release notes before updating.');
+  const latest = releases[0]?.version;
+  if (running && latest && cmpVersion(latest, running) > 0) {
+    add('info', `Headscale ${latest} is available (running ${running})`, '#/settings/updates', 'Read the release notes before updating.');
   }
 
-  // --------------------------------------------------------------- render --
+  // ----------------------------------------------------------------- render --
   const online = nodes.filter((n) => n.online).length;
   const routes = nodes.reduce((a, n) => a + routeInfo(n).subnets.length, 0);
   const exits = nodes.filter((n) => routeInfo(n).exitApproved).length;
   const tagged = nodes.filter((n) => nodeTags(n).length).length;
-  const stat = (label, value, href, sub) => h('a', { class: 'stat stat-link', href },
+  const stat = (label: string, value: number, href: string, sub?: string | null): HTMLAnchorElement => h('a', { class: 'stat stat-link', href },
     h('div', { class: 'stat-n' }, String(value)), h('div', { class: 'stat-l' }, label), sub ? h('div', { class: 'muted small' }, sub) : null);
-  const icons = { danger: 'alert', warning: 'alert', info: 'info', neutral: 'clock' };
 
   put(clear(body),
     h('div', { class: 'stat-row' },
@@ -81,7 +83,7 @@ export async function render(ctx, _params, root) {
       h('div', { class: 'section-head' }, h('h2', 'Needs attention'), items.length ? badge(String(items.length), 'warning') : null),
       items.length
         ? h('div', { class: 'attention-list' }, items.map((it) => h('a', { class: `attention attention-${it.kind}`, href: it.href },
-          icon(icons[it.kind], 16), h('div', h('div', { class: 'attention-title' }, it.text), it.detail ? h('div', { class: 'muted small' }, it.detail) : null),
+          icon(ICONS[it.kind], 16), h('div', h('div', { class: 'attention-title' }, it.text), it.detail ? h('div', { class: 'muted small' }, it.detail) : null),
           icon('chevronRight', 16, 'faint'))))
         : h('div', { class: 'callout callout-success' }, icon('check', 18), h('div', 'Nothing needs attention. Everything is approved, current and in policy.'))));
 }

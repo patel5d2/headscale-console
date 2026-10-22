@@ -1,0 +1,13 @@
+{
+  // Editor project covering all of src/. Builds and CI use tsconfig.client.json
+  // (browser) and tsconfig.server.json (Node) separately, each with only its own types.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "lib": ["es2023", "dom", "dom.iterable"],
+    "types": ["node"]
+  },
+  "include": ["src", "tests", "playwright.config.ts"]
+}

@@ -1,8 +1,10 @@
+import type { Node, User } from '../../shared/types.js';
+import type { Ctx } from '../types.js';
 import { h, icon, button, badge, avatar, moreButton, emptyState, errorState, clear, toast, confirmDialog, formDialog, skeletonRows } from '../ui.js';
 import { userLabel, relTime, fmtDate, parseTime, debounce, pluralize, nodeName, store } from '../util.js';
 import { addDevice } from './actions.js';
 
-export async function render(ctx, _params, root) {
+export async function render(ctx: Ctx, _params: unknown, root: HTMLElement): Promise<() => void> {
   let q = '';
   let destroyed = false;
   const content = h('div');
@@ -12,29 +14,28 @@ export async function render(ctx, _params, root) {
   root.append(
     h('div', { class: 'page-head' },
       h('div', h('h1', 'Users'), h('p', { class: 'muted' }, 'Manage the people who can join devices to your tailnet.')),
-      h('div', { class: 'page-actions' }, button('Add user', { variant: 'primary', icon: 'plus', onClick: () => createUser(ctx, () => refresh(true)) }))),
+      h('div', { class: 'page-actions' }, button('Add user', { variant: 'primary', icon: 'plus', onClick: () => void createUser(ctx, () => void refresh(true)) }))),
     h('div', { class: 'toolbar' }, h('div', { class: 'search' }, icon('search', 16), search, h('kbd', { class: 'kbd-hint' }, '/'))),
     h('div', { class: 'list-meta' }, countEl),
     content);
 
-  async function refresh(force) {
+  async function refresh(force: boolean): Promise<void> {
     try {
       await ctx.load(force);
       if (!destroyed) draw();
     } catch (e) {
-      if (!destroyed) clear(content).appendChild(errorState(e, () => refresh(true)));
+      if (!destroyed) clear(content).appendChild(errorState(e, () => void refresh(true)));
     }
   }
 
-  function draw() {
+  function draw(): void {
     const users = ctx.data.users || [];
     const nodes = ctx.data.nodes || [];
-    const byUser = new Map();
+    const byUser = new Map<string, Node[]>();
     for (const n of nodes) {
       if (!n.user) continue;
       const k = String(n.user.id);
-      if (!byUser.has(k)) byUser.set(k, []);
-      byUser.get(k).push(n);
+      byUser.set(k, [...(byUser.get(k) || []), n]);
     }
     const list = users.filter((u) => {
       if (!q) return true;
@@ -45,7 +46,7 @@ export async function render(ctx, _params, root) {
     clear(content);
     if (!users.length) {
       content.appendChild(emptyState('users', 'No users yet', 'Create a user, then add devices for them with an auth key.',
-        button('Add user', { variant: 'primary', icon: 'plus', onClick: () => createUser(ctx, () => refresh(true)) })));
+        button('Add user', { variant: 'primary', icon: 'plus', onClick: () => void createUser(ctx, () => void refresh(true)) })));
       return;
     }
     if (!list.length) { content.appendChild(emptyState('search', 'No matching users')); return; }
@@ -65,7 +66,7 @@ export async function render(ctx, _params, root) {
             h('div', { class: 'user-name' }, userLabel(u)),
             h('div', { class: 'muted small' }, u.email || u.name)))),
         h('td', { class: 'mono hide-sm' }, u.name),
-        h('td', { class: 'hide-md' }, oidc ? badge(u.provider === 'oidc' ? 'OIDC' : u.provider, 'info', 'link') : badge('Local', 'neutral')),
+        h('td', { class: 'hide-md' }, oidc ? badge(u.provider === 'oidc' ? 'OIDC' : String(u.provider), 'info', 'link') : badge('Local', 'neutral')),
         h('td', own.length
           ? h('a', { href: '#/machines', onclick: (e) => { e.preventDefault(); goToMachines(ctx, u.name); } }, pluralize(own.length, 'machine'),
             online ? h('span', { class: 'muted' }, ` · ${online} online`) : null)
@@ -73,12 +74,12 @@ export async function render(ctx, _params, root) {
         h('td', { class: 'hide-md', title: fmtDate(u.createdAt) }, relTime(u.createdAt)),
         h('td', { class: 'hide-sm' }, last === Infinity ? h('span', { class: 'seen' }, h('span', { class: 'dot dot-on' }), 'Now') : last ? relTime(new Date(last)) : h('span', { class: 'muted' }, '—')),
         h('td', { class: 'col-actions' }, moreButton(() => [
-          { label: 'Add device for user…', icon: 'plus', onClick: () => addDevice(ctx, () => refresh(true), { userId: u.id }) },
+          { label: 'Add device for user…', icon: 'plus', onClick: () => addDevice(ctx, () => void refresh(true), { userId: u.id }) },
           { label: 'Create auth key…', icon: 'key', onClick: () => { store.set('newKeyUser', String(u.id), false); ctx.navigate('#/settings/keys'); } },
           { label: 'View machines', icon: 'machines', onClick: () => goToMachines(ctx, u.name), disabled: !own.length },
           { divider: true },
-          { label: 'Rename user…', icon: 'edit', onClick: () => renameUser(ctx, u, () => refresh(true)) },
-          { label: 'Delete user…', icon: 'trash', danger: true, onClick: () => deleteUser(ctx, u, own, () => refresh(true)) },
+          { label: 'Rename user…', icon: 'edit', onClick: () => void renameUser(ctx, u, () => void refresh(true)) },
+          { label: 'Delete user…', icon: 'trash', danger: true, onClick: () => void deleteUser(ctx, u, own, () => void refresh(true)) },
         ])));
     });
 
@@ -96,12 +97,12 @@ export async function render(ctx, _params, root) {
   return () => { destroyed = true; };
 }
 
-function goToMachines(ctx, username) {
+function goToMachines(ctx: Ctx, username: string): void {
   store.set('machines.q', username, false);
   ctx.navigate('#/machines');
 }
 
-export async function createUser(ctx, after) {
+export async function createUser(ctx: Ctx, after?: (u: User) => void): Promise<void> {
   const r = await formDialog({
     title: 'Add user',
     subtitle: 'Users own devices. With OIDC enabled, users are also created automatically on first login.',
@@ -113,31 +114,33 @@ export async function createUser(ctx, after) {
     ],
     submitLabel: 'Add user',
     onSubmit: async (v) => {
-      if (!/^[A-Za-z0-9][A-Za-z0-9._@+-]*$/.test(v.name)) throw new Error('Username may contain letters, numbers, dots, hyphens, @ and +.');
-      const body = { name: v.name };
-      if (v.displayName) body.displayName = v.displayName;
-      if (v.email) body.email = v.email;
-      if (v.pictureUrl) body.pictureUrl = v.pictureUrl;
-      return ctx.api.createUser(body);
+      const name = String(v.name);
+      if (!/^[A-Za-z0-9][A-Za-z0-9._@+-]*$/.test(name)) throw new Error('Username may contain letters, numbers, dots, hyphens, @ and +.');
+      return ctx.api.createUser({
+        name,
+        ...(v.displayName ? { displayName: String(v.displayName) } : {}),
+        ...(v.email ? { email: String(v.email) } : {}),
+        ...(v.pictureUrl ? { pictureUrl: String(v.pictureUrl) } : {}),
+      });
     },
   });
   if (r) { toast(`User ${userLabel(r)} created`, 'success'); ctx.invalidate(); after?.(r); }
 }
 
-async function renameUser(ctx, u, after) {
+async function renameUser(ctx: Ctx, u: User, after?: () => void): Promise<void> {
   const r = await formDialog({
     title: 'Rename user',
     fields: [{ name: 'name', label: 'Username', value: u.name, mono: true, required: true, help: 'ACL rules that reference the old name (e.g. old@) must be updated too.' }],
     submitLabel: 'Rename',
     onSubmit: async (v) => {
-      if (v.name === u.name) return true;
-      return ctx.api.renameUser(u.id, v.name);
+      if (v.name !== u.name) await ctx.api.renameUser(u.id, String(v.name));
+      return true;
     },
   });
   if (r) { toast('User renamed', 'success'); ctx.invalidate(); after?.(); }
 }
 
-async function deleteUser(ctx, u, own, after) {
+async function deleteUser(ctx: Ctx, u: User, own: Node[], after?: () => void): Promise<void> {
   if (own.length) {
     const ok = await confirmDialog({
       title: `${userLabel(u)} still owns machines`,

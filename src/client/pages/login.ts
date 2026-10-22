@@ -1,7 +1,9 @@
-import { h, icon, logo, button, callout, codeBlock } from '../ui.js';
-import { store, hostOf } from '../util.js';
+import type { ApiError } from '../api.js';
+import type { AppCtx } from '../types.js';
+import { button, callout, codeBlock, h, icon, logo } from '../ui.js';
+import { hostOf, store } from '../util.js';
 
-export function render(ctx, _params, root) {
+export function render(ctx: AppCtx, _params: unknown, root: HTMLElement): void {
   const locked = ctx.config.lockedUrl;
   const lastUrl = ctx.conn?.url || store.get('lastUrl', '');
 
@@ -20,7 +22,7 @@ export function render(ctx, _params, root) {
   const errBox = h('div', { class: 'login-error', 'aria-live': 'polite' });
   const submit = button('Connect', { variant: 'primary', type: 'submit', cls: 'btn-block' });
 
-  if (ctx.loginError) { errBox.appendChild(callout('error', null, ctx.loginError)); ctx.loginError = null; }
+  if (ctx.loginError) { errBox.appendChild(callout('error', null, ctx.loginError)); delete ctx.loginError; }
 
   const form = h('form', { class: 'stack', novalidate: true },
     h('label', { class: 'field' },
@@ -47,7 +49,7 @@ export function render(ctx, _params, root) {
     if (!url) { urlInput.focus(); errBox.appendChild(callout('error', null, 'Enter your Headscale server URL.')); return; }
     if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
     url = url.replace(/\/+$/, '').replace(/\/api\/v1$/, '');
-    try { new URL(url); } catch { errBox.appendChild(callout('error', null, 'That doesn\'t look like a valid URL.')); return; }
+    if (!URL.canParse(url)) { errBox.appendChild(callout('error', null, 'That doesn\'t look like a valid URL.')); return; }
     if (!key) { keyInput.focus(); errBox.appendChild(callout('error', null, 'Enter an API key.')); return; }
 
     submit.disabled = true;
@@ -55,11 +57,12 @@ export function render(ctx, _params, root) {
     try {
       store.set('rememberDefault', remember.checked);
       await ctx.connect({ url, key, remember: remember.checked });
-      location.hash = '#/machines';
+      location.hash = '#/overview';
     } catch (err) {
-      let msg = err.message;
-      if (err.status === 401) msg = 'The API key was rejected. Check that it is correct and has not expired.';
-      else if (err.status === 404) msg = `No Headscale API found at ${hostOf(url)}. Check the URL (it should be the server_url from your Headscale config).`;
+      const { status, message } = err as ApiError;
+      const msg = status === 401 ? 'The API key was rejected. Check that it is correct and has not expired.'
+        : status === 404 ? `No Headscale API found at ${hostOf(url)}. Check the URL (it should be the server_url from your Headscale config).`
+          : message;
       errBox.appendChild(callout('error', 'Could not connect', msg));
     } finally {
       submit.disabled = false;
@@ -68,9 +71,7 @@ export function render(ctx, _params, root) {
   });
 
   const card = h('div', { class: 'login-card' },
-    h('div', { class: 'login-brand' }, logo(30), h('div',
-      h('h1', 'Headscale Console'),
-      h('p', { class: 'muted' }, 'Sign in to manage your tailnet'))),
+    h('div', { class: 'login-brand' }, logo(30), h('div', h('h1', 'Headscale Console'), h('p', { class: 'muted' }, 'Sign in to manage your tailnet'))),
     form);
 
   const help = h('details', { class: 'login-help' },

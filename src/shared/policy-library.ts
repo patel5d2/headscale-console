@@ -1,7 +1,11 @@
 // Policy starting points (whole-file templates) and rule snippets that merge
 // into an existing policy.
+import type { Policy } from './types.js';
 
-export const TEMPLATES = {
+export interface Template { name: string; desc: string; text: string }
+export interface Snippet { name: string; desc: string; make: (admin: string) => Policy }
+
+export const TEMPLATES: Record<string, Template> = {
   allowAll: {
     name: 'Allow all',
     desc: 'Every device can reach every other device. Same as having no policy.',
@@ -90,8 +94,8 @@ export const TEMPLATES = {
 };
 
 // Rule snippets. `admin` is a policy user reference ("alice@") for the first user.
-const ADMINS = (admin) => ({ groups: { 'group:admins': [admin] } });
-export const SNIPPETS = [
+const ADMINS = (admin: string): Policy => ({ groups: { 'group:admins': [admin] } });
+export const SNIPPETS: Snippet[] = [
   {
     name: 'Admins can reach everything',
     desc: 'Creates group:admins (with the first user) and lets it reach every device and port.',
@@ -161,17 +165,18 @@ export const SNIPPETS = [
   },
 ];
 
-const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
+type Obj = Record<string, unknown>;
+const isObj = (v: unknown): v is Obj => !!v && typeof v === 'object' && !Array.isArray(v);
 
 // Merge `add` into `base`: arrays gain entries they don't already have, objects
 // merge key by key, and existing scalar values always win.
-function merge(base, add) {
+function merge(base: unknown, add: unknown): unknown {
   if (Array.isArray(base) && Array.isArray(add)) {
     const seen = new Set(base.map((x) => JSON.stringify(x)));
     return [...base, ...add.filter((x) => !seen.has(JSON.stringify(x)))];
   }
   if (isObj(base) && isObj(add)) {
-    const out = { ...base };
+    const out: Obj = { ...base };
     for (const [k, v] of Object.entries(add)) out[k] = k in base ? merge(base[k], v) : v;
     return out;
   }
@@ -180,10 +185,12 @@ function merge(base, add) {
 
 // Like merge(), but a snippet never widens an existing group, tag owner or host:
 // those entries are only added when the policy doesn't define them yet.
-export function mergePolicy(base, add) {
-  const safe = { ...add };
-  for (const k of ['groups', 'tagOwners', 'hosts']) {
-    if (isObj(safe[k]) && isObj(base[k])) safe[k] = Object.fromEntries(Object.entries(safe[k]).filter(([n]) => !(n in base[k])));
+export function mergePolicy(base: Policy, add: Policy): Policy {
+  const safe: Obj = { ...add };
+  for (const k of ['groups', 'tagOwners', 'hosts'] as const) {
+    const have = base[k];
+    const mine = safe[k];
+    if (isObj(mine) && isObj(have)) safe[k] = Object.fromEntries(Object.entries(mine).filter(([n]) => !(n in have)));
   }
-  return merge(base, safe);
+  return merge(base, safe) as Policy;
 }

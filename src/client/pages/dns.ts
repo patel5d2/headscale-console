@@ -1,7 +1,8 @@
+import type { Ctx } from '../types.js';
 import { h, button, copyable, callout, codeBlock, clear, toast, errorState, statusDot, emptyState } from '../ui.js';
 import { nodeName, nodeIPv4, nodeIPv6 } from '../util.js';
 
-export async function render(ctx, _params, root) {
+export async function render(ctx: Ctx, _params: unknown, root: HTMLElement): Promise<void> {
   const tableHost = h('div');
   const domainInput = h('input', {
     class: 'input mono', placeholder: 'tail.example.com', value: ctx.prefs.baseDomain, spellcheck: 'false', 'aria-label': 'MagicDNS base domain',
@@ -46,7 +47,7 @@ export async function render(ctx, _params, root) {
         codeBlock(dnsSnippet(ctx.prefs.baseDomain)),
         h('p', { class: 'help' }, 'Point a split-DNS domain at your Pi-hole or internal resolver to resolve LAN names over the tailnet, and use extra records to give services friendly names.'))));
 
-  function drawTable() {
+  function drawTable(): void {
     const nodes = (ctx.data.nodes || []).slice().sort((a, b) => nodeName(a).localeCompare(nodeName(b)));
     const base = ctx.prefs.baseDomain;
     clear(tableHost);
@@ -70,7 +71,7 @@ export async function render(ctx, _params, root) {
   }
 }
 
-function dnsSnippet(base) {
+function dnsSnippet(base: string): string {
   return `dns:
   magic_dns: true
   base_domain: ${base || 'tail.example.com'}
