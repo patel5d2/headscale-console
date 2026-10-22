@@ -16,6 +16,14 @@ Environment=PORT=8090
 Environment=HOST=0.0.0.0
 # Environment=HEADSCALE_URL=https://headscale.example.com
 # Environment=HEADSCALE_INSECURE_TLS=true
+# Logs + one-click updates (install-vm.sh --host-actions sets these up):
+# Environment=HOST_ACTIONS=true
+# Environment=HEADSCALE_UNIT=headscale
+# Read Headscale's journal without any other privilege.
+SupplementaryGroups=systemd-journal
+# /var/lib/headscale-console: the only place the console can write (update requests).
+StateDirectory=headscale-console
+StateDirectoryMode=0700
 Restart=on-failure
 RestartSec=3
 

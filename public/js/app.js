@@ -9,6 +9,7 @@ import * as routesPage from './pages/routes.js';
 import * as users from './pages/users.js';
 import * as acls from './pages/acls.js';
 import * as dns from './pages/dns.js';
+import * as logs from './pages/logs.js';
 import * as settings from './pages/settings.js';
 
 const root = document.getElementById('app');
@@ -102,6 +103,7 @@ const ROUTES = [
   { re: /^\/users$/, page: users, nav: 'users' },
   { re: /^\/acls$/, page: acls, nav: 'acls' },
   { re: /^\/dns$/, page: dns, nav: 'dns' },
+  { re: /^\/logs$/, page: logs, nav: 'logs' },
   { re: /^\/settings(?:\/([a-z-]+))?$/, page: settings, nav: 'settings', params: ['section'] },
 ];
 
@@ -111,6 +113,7 @@ const NAV = [
   { id: 'users', label: 'Users', href: '#/users' },
   { id: 'acls', label: 'Access controls', href: '#/acls' },
   { id: 'dns', label: 'DNS', href: '#/dns' },
+  { id: 'logs', label: 'Logs', href: '#/logs' },
   { id: 'settings', label: 'Settings', href: '#/settings' },
 ];
 
@@ -248,7 +251,7 @@ document.addEventListener('keydown', (e) => {
   if (!ctx.api || e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.key === 'g') { ctx._g = Date.now(); return; }
   if (ctx._g && Date.now() - ctx._g < 800) {
-    const map = { m: '#/machines', u: '#/users', a: '#/acls', d: '#/dns', s: '#/settings', r: '#/routes', k: '#/settings/keys' };
+    const map = { m: '#/machines', u: '#/users', a: '#/acls', d: '#/dns', l: '#/logs', s: '#/settings', r: '#/routes', k: '#/settings/keys' };
     if (map[e.key]) { ctx.navigate(map[e.key]); ctx._g = 0; }
   }
 });

@@ -568,3 +568,10 @@ td.nowrap .owner-inline { flex-wrap: nowrap; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
 }
+
+/* Logs */
+button.stat { font: inherit; text-align: left; cursor: pointer; }
+.stat.active { border-color: var(--accent); background: var(--accent-soft); }
+.row-link { cursor: pointer; }
+.row-link:hover td { background: var(--surface-2); }
+.log-msg { font-family: var(--mono); font-size: 12px; white-space: pre-wrap; word-break: break-word; }

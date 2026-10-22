@@ -1,0 +1,10 @@
+# Watches for update requests from Headscale Console (installed by install-vm.sh --host-actions).
+[Unit]
+Description=Watch for Headscale update requests from Headscale Console
+
+[Path]
+PathChanged=/var/lib/headscale-console/update-request
+Unit=headscale-console-update.service
+
+[Install]
+WantedBy=multi-user.target

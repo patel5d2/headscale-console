@@ -17,6 +17,9 @@
  *                            HEADSCALE_URL is not set (e.g. "hs.example.com,10.0.0.5").
  *   HEADSCALE_INSECURE_TLS   "true" to accept self-signed certificates on Headscale.
  *   PROXY_TIMEOUT_MS         Upstream timeout (default 20000).
+ *   HOST_ACTIONS             "true" to enable logs + one-click updates when the console
+ *                            runs on the Headscale VM (see host.js). Needs HEADSCALE_URL.
+ *   HEADSCALE_UNIT           systemd unit whose journal is shown (default "headscale").
  */
 'use strict';
 
@@ -57,6 +60,8 @@ const SECURITY_HEADERS = {
   'X-Frame-Options': 'DENY',
   'Referrer-Policy': 'no-referrer',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  'Cross-Origin-Opener-Policy': 'same-origin',
+  'Cross-Origin-Resource-Policy': 'same-origin',
   'Content-Security-Policy':
     "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; " +
     "script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
@@ -152,9 +157,11 @@ function handleProxy(req, res, rest, search) {
         timeout: TIMEOUT,
       },
       (up) => {
+        // Never relay an upstream HTML page on our origin; the UI only expects JSON.
+        const ct = String(up.headers['content-type'] || '');
         const out = {
           ...SECURITY_HEADERS,
-          'Content-Type': up.headers['content-type'] || 'application/json',
+          'Content-Type': /^application\/json\b/i.test(ct) ? ct : 'text/plain; charset=utf-8',
           'Cache-Control': 'no-store',
         };
         res.writeHead(up.statusCode || 502, out);
@@ -178,6 +185,24 @@ function handleProxy(req, res, rest, search) {
     upstream.end(body.length ? body : undefined);
   });
 }
+
+// Status code of an authenticated GET to the locked Headscale server (0 = unreachable).
+function upstreamStatus(rest, authorization) {
+  return new Promise((resolve) => {
+    const target = new URL(LOCKED_URL + '/' + rest);
+    const isHttps = target.protocol === 'https:';
+    const r = (isHttps ? https : http).request(target, {
+      headers: { Accept: 'application/json', Authorization: authorization },
+      agent: isHttps ? (INSECURE_TLS ? insecureAgent : httpsAgent) : httpAgent,
+      timeout: TIMEOUT,
+    }, (up) => { up.resume(); resolve(up.statusCode || 0); });
+    r.on('timeout', () => r.destroy(new Error('Upstream timed out')));
+    r.on('error', () => resolve(0));
+    r.end();
+  });
+}
+
+const host = require('./host.js')({ lockedUrl: LOCKED_URL, upstreamStatus, sendJSON, log });
 
 // --------------------------------------------------------------- static ----
 
@@ -226,8 +251,11 @@ const server = http.createServer((req, res) => {
       lockedUrl: LOCKED_URL || null,
       allowedHosts: ALLOWED_HOSTS,
       insecureTls: INSECURE_TLS,
+      hostActions: host.enabled,
     });
   }
+
+  if (p.startsWith('/host/')) return host.handle(req, res, p.slice('/host/'.length), url.searchParams);
 
   if (p.startsWith('/proxy/')) return handleProxy(req, res, p.slice('/proxy/'.length), url.search);
 
@@ -242,6 +270,7 @@ server.listen(PORT, HOST, () => {
   if (LOCKED_URL) log(`Locked to Headscale server: ${LOCKED_URL}`);
   else if (ALLOWED_HOSTS.length) log(`Proxy restricted to hosts: ${ALLOWED_HOSTS.join(', ')}`);
   else log('Proxy accepts any Headscale URL entered at login (set HEADSCALE_URL to lock it down)');
+  if (host.enabled) log(`Host actions enabled (logs + updates for unit "${process.env.HEADSCALE_UNIT || 'headscale'}")`);
   if (INSECURE_TLS) log('WARNING: TLS certificate verification to Headscale is disabled');
 });
 

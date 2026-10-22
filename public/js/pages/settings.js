@@ -4,12 +4,14 @@ import {
 } from '../ui.js';
 import { fmtDate, relTime, parseTime, userLabel, store, hostOf, isoInDays, routeInfo, applyTheme } from '../util.js';
 import { keyResult, serverUrl } from './actions.js';
+import { updates } from './updates.js';
 
 const SECTIONS = [
   { id: 'general', label: 'General', icon: 'settings' },
   { id: 'keys', label: 'Auth keys', icon: 'key' },
   { id: 'api-keys', label: 'API keys', icon: 'lock' },
   { id: 'devices', label: 'Device approval', icon: 'check' },
+  { id: 'updates', label: 'Updates', icon: 'download' },
 ];
 
 export async function render(ctx, { section = 'general' }, root) {
@@ -21,7 +23,7 @@ export async function render(ctx, { section = 'general' }, root) {
       h('nav', { class: 'subnav', 'aria-label': 'Settings' },
         SECTIONS.map((s) => h('a', { href: `#/settings/${s.id}`, class: `subnav-link${s.id === section ? ' active' : ''}` }, icon(s.icon, 15), s.label))),
       panel));
-  const fn = { general, keys: authKeys, 'api-keys': apiKeys, devices }[section];
+  const fn = { general, keys: authKeys, 'api-keys': apiKeys, devices, updates }[section];
   return fn(ctx, panel);
 }
 

@@ -1,0 +1,13 @@
+# Applies a Headscale update requested from Headscale Console. Runs as root; the
+# console itself never does. See deploy/headscale-update.sh.
+[Unit]
+Description=Apply a Headscale update requested from Headscale Console
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/headscale-console-update
+TimeoutStartSec=15min
+# Environment=HEADSCALE_UNIT=headscale
+# Environment=HEADSCALE_DB=/var/lib/headscale/db.sqlite

@@ -1,93 +1,6 @@
 import { h, put, icon, button, badge, callout, clear, toast, tabs, spinner, errorState, confirmDialog, modal } from '../ui.js';
 import { parseHuJSON, hasComments, relTime, download, nodeTags, userLabel } from '../util.js';
-
-const TEMPLATES = {
-  allowAll: {
-    name: 'Allow all',
-    desc: 'Every device can reach every other device. Same as having no policy.',
-    text: `// Access control policy for your tailnet.
-// Docs: https://headscale.net/stable/ref/acls/
-{
-  "acls": [
-    // Allow all connections.
-    { "action": "accept", "src": ["*"], "dst": ["*:*"] },
-  ],
-  "ssh": [
-    // Allow users to SSH into their own devices (in check mode).
-    {
-      "action": "check",
-      "src": ["autogroup:member"],
-      "dst": ["autogroup:self"],
-      "users": ["autogroup:nonroot", "root"],
-    },
-  ],
-}
-`,
-  },
-  homelab: {
-    name: 'Homelab',
-    desc: 'Admins reach everything; members reach their own devices and tagged services.',
-    text: `// Homelab policy: admins can reach everything, everyone else can reach
-// their own devices plus shared services tagged tag:service.
-{
-  "groups": {
-    "group:admins": ["admin@"],
-  },
-
-  "tagOwners": {
-    "tag:server": ["group:admins"],
-    "tag:service": ["group:admins"],
-    "tag:exit": ["group:admins"],
-  },
-
-  "hosts": {
-    "home-lan": "192.168.0.0/24",
-  },
-
-  "acls": [
-    // Admins can reach every device and the home LAN.
-    { "action": "accept", "src": ["group:admins"], "dst": ["*:*", "home-lan:*"] },
-
-    // Everyone can reach their own devices.
-    { "action": "accept", "src": ["autogroup:member"], "dst": ["autogroup:self:*"] },
-
-    // Everyone can use shared web services.
-    { "action": "accept", "src": ["autogroup:member"], "dst": ["tag:service:80,443"] },
-
-    // Everyone may use exit nodes.
-    { "action": "accept", "src": ["autogroup:member"], "dst": ["autogroup:internet:*"] },
-  ],
-
-  "autoApprovers": {
-    "routes": {
-      "192.168.0.0/24": ["group:admins"],
-    },
-    "exitNode": ["tag:exit"],
-  },
-
-  "ssh": [
-    {
-      "action": "accept",
-      "src": ["group:admins"],
-      "dst": ["tag:server"],
-      "users": ["root", "autogroup:nonroot"],
-    },
-  ],
-}
-`,
-  },
-  isolated: {
-    name: 'Isolated users',
-    desc: 'Users can only reach their own devices. Nothing is shared by default.',
-    text: `// Each user can only talk to their own devices.
-{
-  "acls": [
-    { "action": "accept", "src": ["autogroup:member"], "dst": ["autogroup:self:*"] },
-  ],
-}
-`,
-  },
-};
+import { TEMPLATES, SNIPPETS, mergePolicy } from './policy-library.js';
 
 // ------------------------------------------------------------- highlighter --
 function escapeHtml(s) {
@@ -203,6 +116,7 @@ export async function render(ctx, _params, root) {
   const formatBtn = button('Format', { size: 'sm', icon: 'code' });
   const validateBtn = button('Validate', { size: 'sm', icon: 'shield' });
   const templatesBtn = button('Templates', { size: 'sm', icon: 'file' });
+  const rulesBtn = button('Add rules', { size: 'sm', icon: 'plus' });
   const downloadBtn = h('button', { class: 'icon-btn', type: 'button', title: 'Download policy', 'aria-label': 'Download policy' }, icon('download', 17));
   const uploadBtn = h('button', { class: 'icon-btn', type: 'button', title: 'Import from file', 'aria-label': 'Import policy file' }, icon('upload', 17));
   const fileInput = h('input', { type: 'file', accept: '.json,.hujson,.txt,application/json', hidden: true });
@@ -293,7 +207,37 @@ export async function render(ctx, _params, root) {
     });
   }
 
+  function chooseSnippet() {
+    modal({
+      title: 'Add prebuilt rules',
+      subtitle: 'Merged into the policy in the editor. Nothing is applied until you save.',
+      size: 'md',
+      body: (api) => h('div', { class: 'template-list' }, SNIPPETS.map((s) =>
+        h('button', { class: 'template', type: 'button', onclick: async () => { if (await addSnippet(s)) api.close(); } },
+          h('strong', s.name), h('span', { class: 'muted small' }, s.desc)))),
+      footer: [],
+    });
+  }
+
+  async function addSnippet(s) {
+    const parsed = parseHuJSON(editor.value.trim() ? editor.value : '{}');
+    const base = parsed.ok ? parsed.value ?? {} : null;
+    if (!base || typeof base !== 'object' || Array.isArray(base)) { toast('Fix the policy\'s syntax before adding rules', 'error'); return false; }
+    if (hasComments(editor.value)) {
+      const ok = await confirmDialog({ title: 'Remove comments?', message: 'Adding rules rewrites the policy as plain JSON, which removes comments. Download a copy first to keep them.', confirmLabel: 'Add anyway' });
+      if (!ok) return false;
+    }
+    const u = (ctx.data.users || [])[0];
+    const admin = u ? (u.name.includes('@') ? u.name : `${u.name}@`) : 'admin@';
+    editor.value = JSON.stringify(mergePolicy(base, s.make(admin)), null, 2) + '\n';
+    view = 'editor';
+    draw();
+    toast(`Added "${s.name}" — review and save to apply`, 'success');
+    return true;
+  }
+
   saveBtn.addEventListener('click', save);
+  rulesBtn.addEventListener('click', chooseSnippet);
   discardBtn.addEventListener('click', async () => {
     if (await confirmDialog({ title: 'Discard changes?', message: 'Your edits will be lost.', confirmLabel: 'Discard', danger: true })) {
       editor.value = saved; setStatus();
@@ -353,7 +297,7 @@ export async function render(ctx, _params, root) {
         readOnly ? callout('info', 'Read-only', 'This server loads its policy from a file, so it can only be viewed here.') : null,
         h('div', { class: 'editor-card' },
           h('div', { class: 'editor-toolbar' }, statusEl,
-            h('div', { class: 'row-gap' }, templatesBtn, formatBtn, validateBtn, discardBtn, uploadBtn, downloadBtn)),
+            h('div', { class: 'row-gap' }, rulesBtn, templatesBtn, formatBtn, validateBtn, discardBtn, uploadBtn, downloadBtn)),
           editor.el),
         h('p', { class: 'help mt-2' }, 'HuJSON: comments and trailing commas are allowed. Press ', h('kbd', 'Ctrl'), '+', h('kbd', 'S'), ' to save.'));
       setStatus();

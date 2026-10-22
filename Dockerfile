@@ -9,7 +9,7 @@ ENV NODE_ENV=production \
     HOST=0.0.0.0
 
 WORKDIR /app
-COPY --chown=node:node package.json server.js ./
+COPY --chown=node:node package.json server.js host.js ./
 COPY --chown=node:node public ./public
 
 USER node

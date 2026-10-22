@@ -27,7 +27,7 @@ export class HeadscaleAPI {
     this.onUnauthorized = onUnauthorized;
   }
 
-  async raw(method, path, { body, query } = {}) {
+  async raw(method, path, { body, query, base = 'proxy/' } = {}) {
     let qs = '';
     if (query) {
       const p = new URLSearchParams();
@@ -41,7 +41,7 @@ export class HeadscaleAPI {
 
     let res;
     try {
-      res = await fetch(`proxy/${path}${qs}`, {
+      res = await fetch(`${base}${path}${qs}`, {
         method,
         headers,
         body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -78,6 +78,12 @@ export class HeadscaleAPI {
   async health() {
     try { return await this.get('health'); } catch (e) { return { error: e.message }; }
   }
+
+  // ------------------------------------------- console host actions (host.js) --
+  releases() { return this.raw('GET', 'releases', { base: 'host/' }).then((r) => r.releases || []); }
+  hostLogs(query) { return this.raw('GET', 'logs', { query, base: 'host/' }); }
+  updateStatus() { return this.raw('GET', 'update', { base: 'host/' }); }
+  requestUpdate(version) { return this.raw('POST', 'update', { body: { version }, base: 'host/' }); }
 
   // --------------------------------------------------------------- users --
   async listUsers() {
