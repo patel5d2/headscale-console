@@ -131,7 +131,10 @@ export async function run(argv: string[], env: NodeJS.ProcessEnv, io: Io): Promi
           `owner:     ${n.user ? userLabel(n.user) : 'tagged device'}`,
           `addresses: ${(n.ipAddresses || []).join(', ') || '-'}`,
           `tags:      ${nodeTags(n).join(', ') || '-'}`,
-          `routes:    ${ri.subnets.map((r) => `${r}${ri.approved.includes(r) ? '' : ' (pending)'}`).join(', ') || '-'}${ri.exitAdvertised ? `, exit node${ri.exitApproved ? '' : ' (pending)'}` : ''}`,
+          `routes:    ${[
+            ...ri.subnets.map((r) => `${r}${ri.approved.includes(r) ? '' : ' (pending)'}`),
+            ...(ri.exitAdvertised ? [`exit node${ri.exitApproved ? '' : ' (pending)'}`] : []),
+          ].join(', ') || '-'}`,
           `key:       ${e.disabled ? 'never expires' : e.expired ? 'expired' : `expires ${relTime(e.date)}`}`,
         ].join('\n'), n);
         return 0;

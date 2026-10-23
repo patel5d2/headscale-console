@@ -18,15 +18,24 @@ let n = 0;
 
 export const test = base.extend<Fixtures>({
   page: async ({ page }, use, info) => {
-    await page.coverage.startJSCoverage({ resetOnNavigation: false });
+    const start = (): Promise<void> => page.coverage.startJSCoverage({ resetOnNavigation: false });
+    const flush = async (): Promise<void> => {
+      const keep = (await page.coverage.stopJSCoverage()).filter((e) => /\/js\/(client|shared)\//.test(e.url)).map((e) => {
+        const file = path.join(ROOT, 'public', new URL(e.url).pathname);
+        const map = `${file}.map`;
+        return fs.existsSync(map) ? { ...e, sourceMap: JSON.parse(fs.readFileSync(map, 'utf8')) } : e;
+      });
+      if (keep.length) fs.writeFileSync(path.join(BROWSER_COVERAGE_DIR, `${process.pid}-${n++}-${info.testId}.json`), JSON.stringify(keep));
+    };
+    // Coverage is kept per script URL, so a new document would replace what the old one
+    // ran: save it before every goto/reload.
+    for (const m of ['goto', 'reload'] as const) {
+      const orig = page[m].bind(page) as (...a: unknown[]) => Promise<unknown>;
+      (page as unknown as Record<string, unknown>)[m] = async (...a: unknown[]) => { await flush(); await start(); return orig(...a); };
+    }
+    await start();
     await use(page);
-    const entries = await page.coverage.stopJSCoverage();
-    const keep = entries.filter((e) => /\/js\/(client|shared)\//.test(e.url)).map((e) => {
-      const file = path.join(ROOT, 'public', new URL(e.url).pathname);
-      const map = `${file}.map`;
-      return fs.existsSync(map) ? { ...e, sourceMap: JSON.parse(fs.readFileSync(map, 'utf8')) } : e;
-    });
-    if (keep.length) fs.writeFileSync(path.join(BROWSER_COVERAGE_DIR, `${process.pid}-${n++}-${info.testId}.json`), JSON.stringify(keep));
+    await flush();
   },
 
   mock: async ({ request }, use) => {

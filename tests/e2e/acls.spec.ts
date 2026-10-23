@@ -375,14 +375,19 @@ test.describe('access controls', () => {
     await tab(page, 'Changes');
     await expect(page.locator('.callout-info')).toContainText('No changes');
     await tab(page, 'Policy file');
-    await page.getByRole('button', { name: 'Discard changes' }).click();
-    await page.getByRole('dialog').getByRole('button', { name: 'Discard' }).click();
-    await editor(page).fill(`${await editor(page).inputValue()}// changed`);
+    await editor(page).fill(`${await editor(page).inputValue()}// changed`); // the saved policy, plus one line
     await tab(page, 'Changes');
     await expect(page.locator('.diff')).toContainText('+ // changed');
     await expect(page.locator('.diff-gap').first()).toBeVisible();
-    await tab(page, 'Policy file');
-    await editor(page).fill(Array.from({ length: 2100 }, (_, i) => `// ${i}`).join('\n'));
+  });
+
+  test('changes too large to compare', async ({ login, page, mock }) => {
+    const big = (tag: string) => `${Array.from({ length: 2100 }, (_, i) => `// ${tag} ${i}`).join('\n')}\n{}`;
+    await mock('reset');
+    await mock('set', { policy: big('saved') });
+    await login({ to: '#/acls' });
+    // Set directly: typing 2,100 lines with fill() is slow.
+    await editor(page).evaluate((el, text) => { (el as HTMLTextAreaElement).value = text; el.dispatchEvent(new Event('input')); }, big('edited'));
     await tab(page, 'Changes');
     await expect(page.locator('.callout-info')).toContainText('Too large to compare here');
   });
@@ -414,11 +419,12 @@ test.describe('access controls', () => {
     await expect(page.locator('tbody tr').first()).toContainText('Latest');
     await page.locator('tbody tr').first().getByRole('button', { name: 'View' }).click();
     await expect(page.locator('#main')).toContainText('This version matches the editor.');
-    await page.locator('tbody tr').last().getByRole('button', { name: 'View' }).click();
-    await expect(page.locator('#main')).toContainText('Admins reach everything');
+    // Other tests' saves are in the history too; the second row is this test's first save.
+    await page.locator('tbody tr').nth(1).getByRole('button', { name: 'View' }).click();
+    await expect(page.locator('.diff')).toContainText('- { "acls": [], "groups": {} }');
     await page.getByRole('button', { name: 'Restore into editor' }).click();
     await expect(lastToast(page)).toContainText('Restored the version from');
-    await expect(editor(page)).toHaveValue(/Admins reach everything/);
+    await expect(editor(page)).toHaveValue('{ "acls": [] }');
     expect((await mock('state')).policy).toBe('{ "acls": [], "groups": {} }');
 
     await page.route('**/console/policy-history/*', (route) => route.fulfill({ status: 404, json: { message: 'version not found' } }));

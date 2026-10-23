@@ -33,7 +33,7 @@ function wsHandshake(port: number, pathName = '/ts2021?X-Tailscale-Handshake=abc
       headers: { Connection: 'Upgrade', Upgrade: 'websocket', 'Sec-WebSocket-Version': '13', 'Sec-WebSocket-Key': crypto.randomBytes(16).toString('base64'), 'Sec-WebSocket-Protocol': 'tailscale-control-protocol', Origin: 'http://evil.example' },
     });
     req.on('upgrade', (res, socket, head) => {
-      const chunks = [head];
+      const chunks: Buffer[] = [Buffer.from(head)];
       socket.on('data', (d: Buffer) => chunks.push(d));
       socket.on('close', () => resolve({ status: res.statusCode!, body: Buffer.concat(chunks).subarray(2).toString() }));
       setTimeout(() => socket.destroy(), 300); // the frame may already be in `head`

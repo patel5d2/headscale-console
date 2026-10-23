@@ -242,7 +242,8 @@ export function startMockHeadscale(port: number): Promise<{ state: () => State; 
       return send(res, 200, { preAuthKey: k });
     }
     if (r === 'preauthkey/expire' && method === 'POST') {
-      const k = st.keys.find((x) => x.id === body.id);
+      // 0.26+ takes the id; older servers take the user and the key itself.
+      const k = st.keys.find((x) => (body.id ? x.id === body.id : x.key === body.key));
       if (!k) return err(res, 404, 'key not found');
       k.expiration = iso(-1000);
       return send(res, 200, {});
@@ -251,7 +252,8 @@ export function startMockHeadscale(port: number): Promise<{ state: () => State; 
 
     // API keys
     // Listed like Headscale 0.29: new-format keys as "hskey-api-<prefix>-***", legacy ones as "<prefix>***".
-    const listed = (k: ApiKey & { secret: string }): string => (k.secret.startsWith('hskey-api-') ? `hskey-api-${k.prefix}-***` : `${k.prefix}***`);
+    // Current keys are listed masked; keys from before 0.27 by their plain prefix.
+    const listed = (k: ApiKey & { secret: string }): string => (k.secret.startsWith('hskey-api-') ? `hskey-api-${k.prefix}-***` : k.prefix!);
     if (r === 'apikey' && method === 'GET') return send(res, 200, { apiKeys: st.apiKeys.map((k) => ({ id: k.id, prefix: listed(k), expiration: k.expiration, createdAt: k.createdAt, lastSeen: k.lastSeen })) });
     if (r === 'apikey' && method === 'POST') {
       const prefix = `NEWKEY${st.nextId++}`;
@@ -260,7 +262,7 @@ export function startMockHeadscale(port: number): Promise<{ state: () => State; 
       return send(res, 200, { apiKey: secret });
     }
     if (r === 'apikey/expire' && method === 'POST') {
-      const k = st.apiKeys.find((x) => x.id === body.id);
+      const k = st.apiKeys.find((x) => (body.id ? x.id === body.id : listed(x) === body.prefix || x.prefix === body.prefix));
       if (!k) return err(res, 400, 'provide either id or prefix');
       k.expiration = iso(-1000);
       return send(res, 200, {});
@@ -268,7 +270,7 @@ export function startMockHeadscale(port: number): Promise<{ state: () => State; 
     if (r.startsWith('apikey/') && method === 'DELETE') {
       const id = q.get('id');
       const pfx = decodeURIComponent(r.slice(7));
-      st.apiKeys = st.apiKeys.filter((x) => x.id !== id && listed(x) !== pfx);
+      st.apiKeys = st.apiKeys.filter((x) => x.id !== id && listed(x) !== pfx && x.prefix !== pfx);
       return send(res, 200, {});
     }
 

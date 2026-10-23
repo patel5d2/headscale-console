@@ -331,11 +331,11 @@ export function confirmDialog({ title, message, confirmLabel = 'Confirm', danger
 }
 
 export interface FormField {
-  name: string; label: string; type?: 'text' | 'select' | 'checkbox' | 'textarea' | 'date' | 'email' | 'number' | 'datetime-local' | 'url';
-  value?: string | boolean; placeholder?: string; help?: string; required?: boolean; optional?: boolean; mono?: boolean;
-  options?: Array<{ value: string; label: string }>; rows?: number; min?: string; max?: string;
+  name: string; label: string; type?: 'text' | 'select' | 'date' | 'email' | 'number' | 'datetime-local' | 'url';
+  value?: string; placeholder?: string; help?: string; required?: boolean; optional?: boolean; mono?: boolean;
+  options?: Array<{ value: string; label: string }>; min?: string; max?: string;
 }
-export type FormValues = Record<string, string | boolean>;
+export type FormValues = Record<string, string>;
 
 /** Generic form modal. onSubmit may throw to show an error; its return value closes the dialog with it. */
 export function formDialog<R = true>({ title, subtitle, fields, submitLabel = 'Save', danger, onSubmit, size = 'sm', extra }: {
@@ -343,22 +343,14 @@ export function formDialog<R = true>({ title, subtitle, fields, submitLabel = 'S
   onSubmit: (values: FormValues, api: ModalApi<R | null>) => Promise<R | undefined> | R | undefined; size?: 'sm' | 'md' | 'lg'; extra?: Node;
 }): Promise<R | null> {
   return new Promise((resolve) => {
-    const inputs: Record<string, HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement> = {};
+    const inputs: Record<string, HTMLInputElement | HTMLSelectElement> = {};
     const errorBox = h('div');
     const submit = button(submitLabel, { variant: danger ? 'danger' : 'primary', type: 'submit' });
     const form = h('form', { class: 'stack', novalidate: true });
     for (const f of fields) {
-      let el: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+      let el: HTMLInputElement | HTMLSelectElement;
       if (f.type === 'select') {
         el = h('select', { class: 'input', name: f.name, 'aria-label': f.label }, (f.options || []).map((o) => h('option', { value: o.value, selected: String(o.value) === String(f.value) }, o.label)));
-      } else if (f.type === 'checkbox') {
-        el = h('input', { type: 'checkbox', name: f.name, checked: !!f.value, 'aria-label': f.label });
-        form.appendChild(h('label', { class: 'check' }, el, h('span', h('span', { class: 'check-label' }, f.label), f.help ? h('span', { class: 'help' }, f.help) : null)));
-        inputs[f.name] = el;
-        continue;
-      } else if (f.type === 'textarea') {
-        el = h('textarea', { class: 'input mono', name: f.name, 'aria-label': f.label, rows: f.rows || 4, placeholder: f.placeholder, spellcheck: 'false' });
-        el.value = String(f.value ?? '');
       } else {
         el = h('input', {
           class: 'input' + (f.mono ? ' mono' : ''), name: f.name, 'aria-label': f.label, type: f.type || 'text', value: f.value ?? '',
@@ -385,7 +377,7 @@ export function formDialog<R = true>({ title, subtitle, fields, submitLabel = 'S
       e.preventDefault();
       clear(errorBox);
       const values: FormValues = {};
-      for (const [k, el] of Object.entries(inputs)) values[k] = el instanceof HTMLInputElement && el.type === 'checkbox' ? el.checked : el.value.trim();
+      for (const [k, el] of Object.entries(inputs)) values[k] = el.value.trim();
       const missing = fields.find((f) => f.required && !values[f.name]);
       if (missing) {
         errorBox.appendChild(callout('error', null, `${missing.label} is required.`));

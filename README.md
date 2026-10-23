@@ -247,7 +247,7 @@ npm run dev          # build, then serve on :8080
 npm test             # build + Playwright: API, end-to-end, unit and CLI tests, with coverage
 ```
 
-Tests run against an in-memory mock Headscale (`tests/support/mock-headscale.ts`) and four console servers with different settings. The coverage report (server, CLI and browser code combined, mapped back to the TypeScript) is in `coverage/index.html`; `COVERAGE_REPORT_ONLY=1 npm test` reports without enforcing the thresholds. Run one file with `npx playwright test tests/e2e/machines.spec.ts`.
+Tests run against an in-memory mock Headscale (`tests/support/mock-headscale.ts`) and four console servers with different settings. The coverage report (server, CLI and browser code combined, mapped back to the TypeScript) is in `coverage/index.html`; `npm test` fails if coverage drops below the floor in `tests/support/coverage.ts` (currently 98% of statements, 89% of branches); `COVERAGE_REPORT_ONLY=1 npm test` reports without enforcing it. Run one file with `npx playwright test tests/e2e/machines.spec.ts`.
 
 CI (`.github/workflows/ci.yml`) typechecks, runs ShellCheck and the test suite on every push and pull request. `.github/workflows/docker.yml` builds the amd64/arm64 image, with Browser SSH, and publishes it to `ghcr.io/patel5d2/headscale-console` from `main` and `v*.*.*` tags.
 
