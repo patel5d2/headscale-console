@@ -305,7 +305,7 @@ test.describe('access controls', () => {
 
     // SSH allowed by a check rule, but no network rule opens port 22.
     await tab(page, 'Policy file');
-    await editor(page).fill(JSON.stringify({ ssh: [{ action: 'accept', src: ['alice@'], dst: ['tag:router'], users: ['root'] }] }));
+    await editor(page).fill(JSON.stringify({ acls: [{ action: 'accept', src: ['tag:router'], dst: ['tag:router:*'] }], ssh: [{ action: 'accept', src: ['alice@'], dst: ['tag:router'], users: ['root'] }] }));
     await tab(page, 'Access checker');
     await page.getByLabel('To', { exact: true }).selectOption({ label: 'router — tag:router' });
     await expect(out.nth(1)).toContainText('allowed by SSH rules, but TCP 22 is blocked');
@@ -375,8 +375,9 @@ test.describe('access controls', () => {
     await tab(page, 'Changes');
     await expect(page.locator('.callout-info')).toContainText('No changes');
     await tab(page, 'Policy file');
-    const long = Array.from({ length: 40 }, (_, i) => `// line ${i}`).join('\n');
-    await editor(page).fill(`${long}\n{}\n${long}\n// changed`);
+    await page.getByRole('button', { name: 'Discard changes' }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Discard' }).click();
+    await editor(page).fill(`${await editor(page).inputValue()}// changed`);
     await tab(page, 'Changes');
     await expect(page.locator('.diff')).toContainText('+ // changed');
     await expect(page.locator('.diff-gap').first()).toBeVisible();
