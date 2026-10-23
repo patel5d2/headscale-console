@@ -56,9 +56,12 @@ function envFor(name: ServerName): NodeJS.ProcessEnv {
     case 'bare':
       return { ...base, HOST_ACTIONS: 'yes', HEADSCALE_INSECURE_TLS: 'true', HEADSCALE_RELEASES_URL: 'http://127.0.0.1:9/' };
     case 'broken':
+      // A data directory inside a regular file can't be created on any OS, even as root.
+      // (Not /proc: on Linux, Node's recursive mkdir there never returns.)
+      fs.writeFileSync(path.join(dir, 'not-a-dir'), '');
       return {
         ...base, HEADSCALE_URL: `${MOCK}/`, HOST_ACTIONS: '1', BROWSER_SSH: 'false', HEADSCALE_UNIT: '-bad unit',
-        DATA_DIR: '/proc/headscale-console-test', STATE_DIRECTORY: path.join(dir, 'missing-state'), UPDATE_STATUS_DIR: path.join(dir, 'missing'),
+        DATA_DIR: path.join(dir, 'not-a-dir', 'data'), STATE_DIRECTORY: path.join(dir, 'missing-state'), UPDATE_STATUS_DIR: path.join(dir, 'missing'),
         HEADSCALE_RELEASES_URL: 'http://127.0.0.1:9/', PATH: '/nonexistent',
       };
   }
