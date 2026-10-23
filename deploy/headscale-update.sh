@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Root helper behind Headscale Console's "Update Headscale" button.
+# Root helper behind Headscale Console's "Update Headscale" and "Turn on device logs" buttons.
 # Run by headscale-console-update.service when the console writes a version to
 # $REQUEST. Nothing in that file is trusted except a strictly validated version.
 # Steps: download the official .deb from GitHub, verify it against the release's
@@ -18,9 +18,35 @@ SEMVER='^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$'
 [[ -f $REQUEST && ! -L $REQUEST ]] || exit 0     # removing the file re-triggers us; nothing to do
 VERSION=$(head -c 16 "$REQUEST" | tr -d '[:space:]')
 rm -f "$REQUEST"
-[[ $VERSION =~ $SEMVER ]] || { echo "Ignoring invalid update request" >&2; exit 1; }
-
 mkdir -p "$OUT" && chmod 755 "$OUT"
+
+# "logtail-on": let devices send their logs (the console's Logs page asks for this).
+# Headscale tells clients not to upload logs unless logtail.enabled is true.
+if [[ $VERSION == logtail-on ]]; then
+  CONFIG=${HEADSCALE_CONFIG:-/etc/headscale/config.yaml}
+  lt() { printf '{"state":"%s","at":"%s","message":"%s"}\n' "$1" "$(date -u +%FT%TZ)" "$2" > "$OUT/logtail.json.tmp" && mv -f "$OUT/logtail.json.tmp" "$OUT/logtail.json"; }
+  [[ -f $CONFIG && ! -L $CONFIG ]] || { lt failed "Headscale config not found at $CONFIG"; exit 1; }
+  # Rewrite only the "enabled:" line inside the top-level logtail block (add the block if missing).
+  NEW=$(awk '
+    /^logtail:/ { print; inblk = 1; seen = 1; next }
+    inblk && /^[^[:space:]#]/ { if (!done) print "  enabled: true"; inblk = 0; done = 1 }
+    inblk && /^[[:space:]]+enabled:/ { sub(/enabled:.*/, "enabled: true"); done = 1 }
+    { print }
+    END { if (inblk && !done) print "  enabled: true"; if (!seen) print "logtail:\n  enabled: true" }
+  ' "$CONFIG")
+  if [[ $NEW == "$(cat "$CONFIG")" ]]; then lt on "Already enabled"; exit 0; fi
+  cp -a "$CONFIG" "$CONFIG.console-backup"
+  printf '%s\n' "$NEW" > "$CONFIG.tmp" && chmod --reference="$CONFIG" "$CONFIG.tmp" && chown --reference="$CONFIG" "$CONFIG.tmp" && mv -f "$CONFIG.tmp" "$CONFIG"
+  if systemctl restart "$UNIT" && sleep 5 && systemctl is-active --quiet "$UNIT"; then
+    lt on "Devices may now send their logs"; exit 0
+  fi
+  cp -a "$CONFIG.console-backup" "$CONFIG"
+  systemctl restart "$UNIT" || true
+  lt failed "Headscale did not start with the change; the previous config was restored"
+  exit 1
+fi
+
+[[ $VERSION =~ $SEMVER ]] || { echo "Ignoring invalid update request" >&2; exit 1; }
 exec > >(tee "$OUT/update.log") 2>&1
 
 FROM=$(headscale version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 || true)

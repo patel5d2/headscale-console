@@ -51,3 +51,7 @@ export const AUDIT_WANTED = !!LOCKED_URL && !falsy(env.AUDIT_LOG);
 export const AUDIT_MAX_BYTES = parseInt(env.AUDIT_MAX_BYTES || '', 10) || 10 * 1024 * 1024;
 /** Policy versions kept in the history (default 200). */
 export const POLICY_HISTORY_MAX = parseInt(env.POLICY_HISTORY_MAX || '', 10) || 200;
+/** How often automatic collection checks the tailnet for network activity (default 30 s). */
+export const ACTIVITY_POLL_MS = parseInt(env.ACTIVITY_POLL_MS || '', 10) || 30_000;
+/** Each device's log rotates to <label>.jsonl.1 past this size (default 5 MB). */
+export const DEVICE_LOG_MAX_BYTES = parseInt(env.DEVICE_LOG_MAX_BYTES || '', 10) || 5 * 1024 * 1024;

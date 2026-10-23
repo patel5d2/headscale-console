@@ -26,6 +26,8 @@ export interface JoinOptions {
   install?: boolean;
   /** Include a step that shows the result (default true). */
   verify?: boolean;
+  /** Where the device sends its Tailscale log (the console's ingest address); see logStep(). */
+  logTarget?: string;
 }
 
 // The macOS app doesn't put `tailscale` on PATH, so call the bundled CLI directly.
@@ -40,6 +42,31 @@ const INSTALL: Record<'mac' | 'linux' | 'win', string> = {
   linux: 'curl -fsSL https://tailscale.com/install.sh | sh',
   win: 'winget install --id Tailscale.Tailscale --exact --accept-source-agreements --accept-package-agreements',
 };
+
+// tailscaled reads TS_LOG_TARGET from a per-platform environment file at start-up, then
+// uploads its log there instead of to Tailscale. Only plain URLs are accepted, so the
+// value needs no quoting in any of the shells below.
+const LOG_TARGET_RE = /^https?:\/\/[A-Za-z0-9.:[\]_/-]+$/;
+const MAC_ENV_DIRS = [
+  '/private/var/root/Library/Containers/io.tailscale.ipn.macsys.network-extension/Data', // standalone app
+  '"$1/Library/Containers/io.tailscale.ipn.macos.network-extension/Data"', // App Store app
+];
+
+/** The step that points a device's Tailscale log at the console, or '' if there's no valid target. */
+export function logStep(os: JoinOS, target: string | undefined): string {
+  if (!target || !LOG_TARGET_RE.test(target)) return '';
+  const line = `TS_LOG_TARGET=${target}`;
+  switch (os) {
+    case 'linux':
+      return `sudo sh -c "sed -i '/^TS_LOG_TARGET=/d' /etc/default/tailscaled 2>/dev/null; echo ${line} >> /etc/default/tailscaled" && sudo systemctl restart tailscaled`;
+    case 'mac':
+      return `sudo sh -c 'for d in ${MAC_ENV_DIRS.join(' ')}; do [ -d "$d" ] || continue; sed -i "" "/^TS_LOG_TARGET=/d" "$d/tailscaled-env.txt" 2>/dev/null; echo ${line} >> "$d/tailscaled-env.txt"; done; killall io.tailscale.ipn.macsys.network-extension io.tailscale.ipn.macos.network-extension 2>/dev/null; sleep 3; true' _ "$HOME"`;
+    case 'win':
+      return `$f = "$env:ProgramData\\Tailscale\\tailscaled-env.txt"; @(Get-Content $f -ErrorAction SilentlyContinue | Where-Object { $_ -notmatch '^TS_LOG_TARGET=' }) + '${line}' | Set-Content $f; Restart-Service Tailscale`;
+    default:
+      return line; // docker / compose: an environment variable of the container
+  }
+}
 
 /** POSIX shell quoting: plain words stay as they are, anything else is single-quoted. */
 export const shq = (s: string): string => (/^[A-Za-z0-9_@%+=:,./-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`);
@@ -77,6 +104,7 @@ export function joinCommand(os: JoinOS, url: string, key: string | undefined, ta
       return [
         'docker run -d --name tailscaled --restart unless-stopped --cap-add NET_ADMIN --device /dev/net/tun \\',
         key ? `  -e TS_AUTHKEY=${shq(key)} \\` : '',
+        logStep(os, o.logTarget) ? `  -e ${logStep(os, o.logTarget)} \\` : '',
         `  -e TS_EXTRA_ARGS=${shq(extra)} \\`,
         '  -e TS_STATE_DIR=/var/lib/tailscale -v tailscale-state:/var/lib/tailscale \\',
         '  tailscale/tailscale:latest',
@@ -92,6 +120,7 @@ export function joinCommand(os: JoinOS, url: string, key: string | undefined, ta
       '    devices: [/dev/net/tun]',
       '    environment:',
       key ? `      TS_AUTHKEY: ${JSON.stringify(key)}` : '',
+      logStep(os, o.logTarget) ? `      TS_LOG_TARGET: ${JSON.stringify(o.logTarget)}` : '',
       `      TS_EXTRA_ARGS: ${JSON.stringify(extra)}`,
       '      TS_STATE_DIR: /var/lib/tailscale',
       '    volumes:',
@@ -105,6 +134,7 @@ export function joinCommand(os: JoinOS, url: string, key: string | undefined, ta
   if (os === 'win') flags.push('--unattended');
   return [
     o.install === false ? '' : INSTALL[os],
+    logStep(os, o.logTarget),
     `${CLI[os]} up ${flags.join(' ')}`,
     o.verify === false ? '' : `${CLI[os]} status`,
   ].filter(Boolean).join('\n');

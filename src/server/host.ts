@@ -8,6 +8,8 @@
  *   GET  /host/logs      Headscale's journald log            (API key required)
  *   GET  /host/update    status of the last update            (API key required)
  *   POST /host/update    request an update to {version}      (API key required)
+ *   POST /host/logtail   ask the root helper to let devices send their logs
+ *                        (logtail.enabled: true in Headscale's config; API key required)
  *
  * The console never runs anything privileged. An update request is just a version
  * number written to a file; a root systemd path unit (headscale-console-update)
@@ -121,6 +123,19 @@ async function requestUpdate(req: IncomingMessage, res: ServerResponse): Promise
   return { queued: version };
 }
 
+function requestLogtail(req: IncomingMessage): { queued: string } {
+  const st = updateStatus();
+  if (st.state === 'running' || st.state === 'queued') throw new HttpError(409, 'A Headscale update is in progress; try again when it finishes');
+  try {
+    fs.writeFileSync(REQUEST_FILE, 'logtail-on\n', { mode: 0o600 });
+  } catch (e) {
+    const err = e as NodeJS.ErrnoException;
+    throw new HttpError(500, `Could not queue the change (${err.code || err.message}). Re-run install-vm.sh with --host-actions.`);
+  }
+  log(`Device logs requested for Headscale from ${req.socket.remoteAddress}`);
+  return { queued: 'logtail-on' };
+}
+
 // ------------------------------------------------------------------ router --
 export async function handleHost(req: IncomingMessage, res: ServerResponse, action: string, query: URLSearchParams): Promise<void> {
   try {
@@ -130,6 +145,7 @@ export async function handleHost(req: IncomingMessage, res: ServerResponse, acti
     if (action === 'logs' && req.method === 'GET') return sendJSON(res, 200, await readLogs(query));
     if (action === 'update' && req.method === 'GET') return sendJSON(res, 200, updateStatus());
     if (action === 'update' && req.method === 'POST') return sendJSON(res, 202, await requestUpdate(req, res));
+    if (action === 'logtail' && req.method === 'POST') return sendJSON(res, 202, requestLogtail(req));
     return sendJSON(res, 404, { message: 'Unknown host action' });
   } catch (e) {
     const err = e as HttpError;

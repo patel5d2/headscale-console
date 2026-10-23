@@ -49,7 +49,7 @@ docker exec -it headscale headscale apikeys create --expiration 90d
 
 ### On a VM without Docker (systemd)
 
-Requires Node.js 20 or newer.
+Requires Node.js 22.15 or newer.
 
 ```bash
 sudo ./deploy/install-vm.sh --url https://headscale.example.com
@@ -82,6 +82,8 @@ All settings are environment variables; none are required.
 | `AUDIT_LOG` | on | Set `false` to stop recording changes. Needs `HEADSCALE_URL`. |
 | `AUDIT_MAX_BYTES` | `10485760` | The audit log rotates to `audit.jsonl.1` past this size. |
 | `POLICY_HISTORY_MAX` | `200` | Policy versions kept. |
+| `ACTIVITY_POLL_MS` | `30000` | How often automatic collection checks the tailnet for network activity. |
+| `DEVICE_LOG_MAX_BYTES` | `5242880` | Each device's log rotates to `.1` past this size. |
 | `HEADSCALE_RELEASES_URL` | GitHub releases API | Release feed for update checks (e.g. a mirror). |
 | `RELEASES_CACHE_MS` | `3600000` | How long the release feed is cached. |
 
@@ -130,7 +132,7 @@ networks:
 | **Routes** overview | ✅ | All subnet routes and exit nodes, primary/standby (HA) status, approve in one click, "Awaiting approval" view, nav badge with pending count. |
 | **Users** | ✅ | Create, rename, delete (offers to remove their machines first), machine counts, last active, add device / auth key for a user. |
 | **Access controls** | ✅ | **Visual editor** for access rules, SSH rules, groups, tag owners and hosts, with suggestions for every user, group, tag and host. **Access checker**: "can machine A reach machine B on port N, and SSH in as user X?", naming the rule that decides. HuJSON editor with syntax highlighting, line numbers and live syntax checking; server-side validation; templates; **Add rules** (prebuilt snippets: admins, own devices, exit nodes, web/DNS services, SSH, ping, auto-approvers); Format; import/export; Ctrl+S to save; *Preview rules* (filter by user or tag), a *Tags* view and a *Changes* diff against the saved policy. |
-| **Logs** | ✅ host actions | Headscale's journald log with error/warning counts, similar messages grouped into *Top issues*, level filter, search and download. |
+| **Logs** | ✅ automatic | Three tabs, collected without running anything by hand once turned on: **Headscale server** (its journald log with error/warning counts, *Top issues*, level filter, search, download; needs host actions), **Devices** (every Linux, macOS, Windows and Docker device's Tailscale log) and **Network activity** (machines joining, leaving, going online/offline, route, tag, owner, address and key-expiry changes). See below. |
 | **Updates** | ✅ | *Settings → Updates* compares your version with the latest stable release. With host actions: one-click update with checksum verification, database backup and automatic rollback. Otherwise: copy-paste commands for .deb and Docker. |
 | **DNS** | ✅ / config | MagicDNS names for every machine with copy buttons. Nameservers, split DNS and extra records are configured in Headscale's `config.yaml` (not its API) — the page shows a ready-made snippet. |
 | **Settings → Keys** (auth keys) | ✅ | Reusable / ephemeral / tagged / expiry (presets or an exact date and time), revoke, delete, Active/Used/Expired tabs. |
@@ -202,6 +204,22 @@ Requirements:
 
 Run `scripts/build-ssh.sh` once (needs Go and git). It puts the client in `public/ssh/`, which the server serves and the Docker build copies as is. If it's missing, the Docker build compiles it in a Go stage instead, which takes a few minutes and about 4 GB of free Docker disk space. To build without SSH, run `docker build --target app .`.
 
+### Automatic logs
+
+Run the console on the Headscale server, then everything is collected for you:
+
+```bash
+sudo ./deploy/install-vm.sh --url https://hs.example.com --host-actions
+```
+
+1. **Logs → Turn on automatic collection** (one click). The console creates an API key of its own (valid one year, stored in `DATA_DIR/collector.json`, readable only by the console) so collection keeps running when nobody is signed in. Network activity starts being recorded straight away; nothing is installed on any device.
+2. **Logs → Devices → Allow device logs** (one click). Headscale tells devices not to send their logs unless `logtail.enabled: true` is in its config; the console's root helper sets it, restarts Headscale, and restores the previous config if Headscale doesn't come back. Without host actions, add those two lines yourself.
+3. Check **Address devices use to reach this console**: it goes into the join commands, so it must be reachable from every device. Use the console's public `https://` address (see *Behind a reverse proxy*) or its tailnet address; the page warns about `localhost` and unencrypted public addresses.
+
+From then on, devices added with **Add device** send their Tailscale log as they join (Linux, macOS, Windows, Docker and Compose; untick *Send logs to the console* to skip it). Machines that joined earlier show **Set up…** with the one command for their platform. Under the hood the command sets `TS_LOG_TARGET` in tailscaled's environment file (`/etc/default/tailscaled`, `%ProgramData%\Tailscale\tailscaled-env.txt`, or the macOS app's container) and restarts Tailscale.
+
+How it stays safe and small: devices post to `/ingest/<token>/…`, where the random token is the only way in (wrong tokens get a plain 404); bodies are capped at 512 KB (4 MB decompressed), lines at 2 KB, and each device's log rotates past `DEVICE_LOG_MAX_BYTES`. Turning collection off refuses devices, expires the console's API key and keeps what was collected. In Docker (no host actions), network activity and device logs work the same way; only Headscale's own log needs the console on the Headscale server.
+
 ### Logs and one-click updates (host actions)
 
 Headscale has no API for its logs or for upgrading itself, so these need the console on the same VM as a Headscale installed from the official `.deb`:
@@ -240,7 +258,7 @@ The console uses relative paths, so it also works under a sub-path (e.g. `/conso
 
 ## Development
 
-TypeScript in `src/`, compiled with `tsc` (no bundler, no runtime dependencies). Node.js 20+.
+TypeScript in `src/`, compiled with `tsc` (no bundler, no runtime dependencies). Node.js 22.15+.
 
 ```bash
 npm ci

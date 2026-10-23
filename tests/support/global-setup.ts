@@ -43,12 +43,16 @@ function envFor(name: ServerName): NodeJS.ProcessEnv {
   switch (name) {
     case 'full':
       fs.mkdirSync(bin, { recursive: true });
+      fs.mkdirSync(path.join(dir, 'data'), { recursive: true });
+      // Starts with collection on (with a key the mock doesn't know), as after a restart.
+      fs.writeFileSync(path.join(dir, 'data', 'collector.json'), JSON.stringify({ key: 'hskey-api-STALE-0000000000', token: 'restart-token-0123456789', since: '2026-01-01T00:00:00Z' }));
       fs.writeFileSync(path.join(bin, 'journalctl'), FAKE_JOURNALCTL, { mode: 0o755 });
       for (const d of ['data', 'state', 'update-status']) fs.mkdirSync(path.join(dir, d), { recursive: true });
       return {
         ...base, HEADSCALE_URL: MOCK, HOST_ACTIONS: 'true', HEADSCALE_UNIT: 'headscale', PUBLIC_DIR: testPublicDir(dir),
         DATA_DIR: path.join(dir, 'data'), STATE_DIRECTORY: path.join(dir, 'state'), UPDATE_STATUS_DIR: path.join(dir, 'update-status'),
         HEADSCALE_RELEASES_URL: `${MOCK}/__mock/releases`, RELEASES_CACHE_MS: '1', AUDIT_MAX_BYTES: '8000', POLICY_HISTORY_MAX: '5',
+        ACTIVITY_POLL_MS: '300', DEVICE_LOG_MAX_BYTES: '4000',
         PATH: `${bin}:${process.env.PATH}`,
       };
     case 'open':

@@ -68,3 +68,17 @@ test('logs parse zerolog, JSON and priority fallbacks while grouping repeated wa
   assert.deepEqual(result.counts, { error: 2, warn: 1, info: 1, debug: 1 }); assert.equal(result.groups[0].n, 2); assert.equal(result.groups[0].last.t, 3);
   assert.equal(analyze(entries, 1).groups.length, 1); assert.deepEqual(analyze([]).groups, []);
 });
+
+test('device log step: one per platform, only for a plain URL', async () => {
+  const { logStep, joinCommand, joinScript } = await import('../../dist/shared/join.js');
+  const t = 'https://hs.example.com:8090/ingest/abcdefghijklmnopqrst/k3';
+  assert.match(logStep('linux', t), /echo TS_LOG_TARGET=https:\/\/hs\.example\.com:8090\/ingest\/abcdefghijklmnopqrst\/k3 >> \/etc\/default\/tailscaled" && sudo systemctl restart tailscaled$/);
+  assert.match(logStep('mac', t), /io\.tailscale\.ipn\.macsys\.network-extension\/Data .*io\.tailscale\.ipn\.macos\.network-extension\/Data.*killall/);
+  assert.match(logStep('win', t), /tailscaled-env\.txt.*'TS_LOG_TARGET=https:.*Restart-Service Tailscale$/);
+  assert.equal(logStep('docker', t), `TS_LOG_TARGET=${t}`);
+  for (const bad of [undefined, '', 'ftp://x/y', 'https://x/$(id)', "https://x/'q", 'https://x/a b']) assert.equal(logStep('linux', bad), '');
+  const lines = joinCommand('linux', 'https://hs.example.com', 'k', [], { logTarget: t }).split('\n');
+  assert.ok(lines.findIndex((l) => l.includes('TS_LOG_TARGET')) < lines.findIndex((l) => l.includes(' up ')), 'set before tailscale up');
+  assert.match(joinCommand('compose', 'https://hs.example.com', 'k', [], { logTarget: t }), /TS_LOG_TARGET: "https:/);
+  assert.match(joinScript('linux', 'https://hs.example.com', 'k', [], { logTarget: t, install: false }), /set -eu\nsudo sh -c/);
+});

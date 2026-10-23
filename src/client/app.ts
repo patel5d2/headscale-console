@@ -13,7 +13,7 @@ import * as settings from './pages/settings.js';
 import * as ssh from './pages/ssh.js';
 import * as users from './pages/users.js';
 import type { AppCtx, ConsoleConfig, Conn, Ctx, PageRender } from './types.js';
-import { clear, h, icon, logo, showMenu, spinner, toast } from './ui.js';
+import { clear, closeModals, h, icon, logo, showMenu, spinner, toast } from './ui.js';
 import { applyTheme, hostOf, store } from './util.js';
 
 const root = document.getElementById('app')!;
@@ -103,7 +103,7 @@ const ROUTES: Route[] = [
   { re: /^\/users$/, page: users, nav: 'users' },
   { re: /^\/acls$/, page: acls, nav: 'acls' },
   { re: /^\/dns$/, page: dns, nav: 'dns' },
-  { re: /^\/logs$/, page: logs, nav: 'logs' },
+  { re: /^\/logs(?:\/(server|devices|activity))?$/, page: logs, nav: 'logs', params: ['tab'] },
   { re: /^\/audit$/, page: audit, nav: 'audit' },
   { re: /^\/ssh\/([^/]+)$/, page: ssh, nav: 'machines', params: ['id'] },
   { re: /^\/settings(?:\/([a-z-]+))?$/, page: settings, nav: 'settings', params: ['section'] },
@@ -201,6 +201,7 @@ export async function route(): Promise<void> {
   if (!match) { location.replace('#/overview'); return; }
 
   if (cleanup) { try { cleanup(); } catch { /* a page's cleanup must not block navigation */ } cleanup = null; }
+  closeModals(); // a dialog belongs to the page it was opened on
   if (!ctx.api && !match.public) { location.replace('#/login'); return; }
   if (ctx.api && match.public) { location.replace('#/overview'); return; }
 

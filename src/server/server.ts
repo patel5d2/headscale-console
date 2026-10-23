@@ -11,8 +11,10 @@ import path from 'node:path';
 import {
   ALLOWED_HOSTS, BROWSER_SSH, HEADSCALE_UNIT, HOST, HOST_ACTIONS, HOST_ACTIONS_WANTED, INSECURE_TLS, LOCKED_URL, PORT, PUBLIC_DIR,
 } from './config.js';
+import { handleCollector, startCollector } from './collector.js';
 import { handleHost } from './host.js';
 import { log, SECURITY_HEADERS, sendJSON } from './http.js';
+import { handleDeviceLogs, handleIngest } from './ingest.js';
 import { handleProxy, handleUpgrade } from './proxy.js';
 import { AUDIT_ENABLED, handleConsole } from './store.js';
 
@@ -79,7 +81,14 @@ export const server = http.createServer((req, res) => {
   // Control-plane key fetch for the Browser SSH client (see handleUpgrade).
   if (p === '/key' && BROWSER_SSH && req.method === 'GET') return void handleProxy(req, res, 'key', url.search);
   if (p.startsWith('/host/')) return void handleHost(req, res, p.slice('/host/'.length), url.searchParams);
-  if (p.startsWith('/console/')) return void handleConsole(req, res, p.slice('/console/'.length), url.searchParams);
+  if (p.startsWith('/ingest/')) return void handleIngest(req, res, p.slice('/ingest/'.length));
+  if (p.startsWith('/console/')) {
+    const rest = p.slice('/console/'.length);
+    return void (async () => {
+      if (await handleCollector(req, res, rest, url.searchParams) || await handleDeviceLogs(req, res, rest, url.searchParams)) return;
+      await handleConsole(req, res, rest, url.searchParams);
+    })();
+  }
   if (p.startsWith('/proxy/')) return void handleProxy(req, res, p.slice('/proxy/'.length), url.search);
   if (req.method !== 'GET' && req.method !== 'HEAD') return sendJSON(res, 405, { message: 'Method not allowed' });
   return serveStatic(req, res, p);
@@ -96,6 +105,7 @@ server.listen(PORT, HOST, () => {
   else log('Proxy accepts any Headscale URL entered at login (set HEADSCALE_URL to lock it down)');
   if (BROWSER_SSH) log('Browser SSH enabled');
   if (AUDIT_ENABLED) log('Audit log and policy history enabled');
+  startCollector();
   if (HOST_ACTIONS) log(`Host actions enabled (logs + updates for unit "${HEADSCALE_UNIT}")`);
   else if (HOST_ACTIONS_WANTED) log('HOST_ACTIONS ignored: it requires HEADSCALE_URL so API keys can be verified');
   if (INSECURE_TLS) log('WARNING: TLS certificate verification to Headscale is disabled');

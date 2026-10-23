@@ -67,8 +67,9 @@ fi
 [[ $PORT =~ ^[0-9]+$ && $PORT -ge 1 && $PORT -le 65535 ]] || die "--port must be a number between 1 and 65535."
 [[ $HOST_ACTIONS == 0 || -n $HS_URL ]] || die "--host-actions needs --url."
 
-if ! command -v node >/dev/null || [[ "$(node -p 'process.versions.node.split(".")[0]')" -lt 20 ]]; then
-  echo "Node.js 20 or newer is required. Install it first, e.g.:" >&2
+# 22.15+ has zstd, which devices use to compress the logs they send.
+if ! command -v node >/dev/null || ! node -e 'process.exit(require("zlib").zstdDecompressSync ? 0 : 1)' 2>/dev/null; then
+  echo "Node.js 22.15 or newer is required. Install it first, e.g.:" >&2
   echo "  curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt-get install -y nodejs" >&2
   exit 1
 fi

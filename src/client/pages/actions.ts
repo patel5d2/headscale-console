@@ -4,6 +4,7 @@ import { joinCommand, joinScript, OS_LABELS, type JoinOptions, type JoinOS } fro
 import type { Node, Policy } from '../../shared/types.js';
 import type { AppCtx, Ctx } from '../types.js';
 import type { MenuItem } from '../ui.js';
+import { logTarget } from './logs-collect.js';
 import { button, callout, chipInput, clear, codeBlock, confirmDialog, formDialog, h, modal, tabs, toast, toggle } from '../ui.js';
 import {
   download, EXIT_ROUTES, expiryState, hostOf, isExitRoute, isoInDays, nodeName, nodeTags, parseHuJSON, routeInfo, userLabel, validCIDR,
@@ -295,7 +296,9 @@ export function addDevice(ctx: Ctx, after?: After, { initialTab = 'key', userId 
           aclTags: tags,
         });
         ctx.invalidate();
-        out.appendChild(keyResult(url, k.key, tags));
+        // With automatic collection on, the commands also send the device's log here.
+        const st = ctx.config.auditLog ? await ctx.api.collector().catch(() => null) : null;
+        out.appendChild(keyResult(url, k.key, tags, logTarget(st, `k${k.id}`)));
       } catch (e) {
         out.appendChild(callout('error', null, (e as Error).message));
       } finally { gen.disabled = false; gen.classList.remove('loading'); }
@@ -355,9 +358,9 @@ const defaultOS = (): JoinOS => (/Mac/i.test(navigator.platform) ? 'mac' : /Win/
 const safe = (re: RegExp) => (s: string): string => s.replace(re, '');
 
 /** OS tabs + option toggles that rebuild the join command live. */
-export function commandBuilder(url: string, key?: string, tags: string[] = []): HTMLDivElement {
+export function commandBuilder(url: string, key?: string, tags: string[] = [], logsTo?: string): HTMLDivElement {
   let os = defaultOS();
-  const o: JoinOptions & { oneLine?: boolean } = { acceptRoutes: true, acceptDns: true, install: true, verify: true };
+  const o: JoinOptions & { oneLine?: boolean } = { acceptRoutes: true, acceptDns: true, install: true, verify: true, ...(logsTo ? { logTarget: logsTo } : {}) };
   const box = h('div');
   const actions = h('div', { class: 'row-gap' });
   const command = (): string => {
@@ -379,6 +382,11 @@ export function commandBuilder(url: string, key?: string, tags: string[] = []): 
     cb.addEventListener('change', () => { (o as Record<string, unknown>)[prop] = cb.checked; show(); });
     return h('label', { class: 'check' }, cb, h('span', h('span', { class: 'check-label' }, label), h('span', { class: 'help' }, help)));
   };
+  const sendLogs = (): HTMLLabelElement => {
+    const cb = h('input', { type: 'checkbox', checked: true, 'aria-label': 'Send logs to the console' });
+    cb.addEventListener('change', () => { if (cb.checked) o.logTarget = logsTo; else delete o.logTarget; show(); });
+    return h('label', { class: 'check' }, cb, h('span', h('span', { class: 'check-label' }, 'Send logs to the console'), h('span', { class: 'help' }, 'The device sends its Tailscale log to this console\'s Logs page.')));
+  };
   const text = (prop: 'hostname' | 'useExitNode' | 'operator' | 'routes', label: string, placeholder: string, parse: (s: string) => string | string[]): HTMLLabelElement => {
     const inp = h('input', { class: 'input mono', placeholder, spellcheck: 'false', 'aria-label': label });
     inp.addEventListener('input', () => { (o as Record<string, unknown>)[prop] = parse(inp.value.trim()); show(); });
@@ -392,6 +400,7 @@ export function commandBuilder(url: string, key?: string, tags: string[] = []): 
     h('details', h('summary', { class: 'small' }, 'Command options'),
       h('div', { class: 'stack pad-y' },
         h('div', { class: 'grid-2' },
+          logsTo ? sendLogs() : null,
           check('install', 'Install Tailscale', 'Include the step that installs Tailscale.'),
           check('verify', 'Show status afterwards', 'Run tailscale status once connected.'),
           check('oneLine', 'Single line', 'Join the steps into one command.'),
@@ -411,9 +420,9 @@ export function commandBuilder(url: string, key?: string, tags: string[] = []): 
           text('operator', 'Operator (Linux user)', 'alice', safe(/[^a-z0-9_-]/gi))))));
 }
 
-export function keyResult(url: string, key: string, tags: string[] = []): HTMLDivElement {
+export function keyResult(url: string, key: string, tags: string[] = [], logsTo?: string): HTMLDivElement {
   return h('div', { class: 'stack key-result' },
     callout('success', 'Auth key created', 'Copy it now — for security it won\'t be shown in full again.'),
     h('div', { class: 'field' }, h('span', { class: 'field-label' }, 'Auth key'), codeBlock(key, { wrap: true })),
-    commandBuilder(url, key, tags));
+    commandBuilder(url, key, tags, logsTo));
 }

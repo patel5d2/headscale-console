@@ -242,6 +242,10 @@ export interface ModalOpts<R> {
   dismissible?: boolean;
 }
 
+const openModals = new Set<() => void>();
+/** Closes every open dialog, as if cancelled (the router calls this on navigation). */
+export function closeModals(): void { for (const close of [...openModals]) close(); }
+
 export function modal<R = unknown>({ title, subtitle, body, footer, size = 'md', onClose, dismissible = true }: ModalOpts<R>): ModalApi<R> {
   const prevFocus = document.activeElement as HTMLElement | null;
   const dialog = h('div', { class: `modal modal-${size}`, role: 'dialog', 'aria-modal': 'true', 'aria-label': title });
@@ -251,6 +255,7 @@ export function modal<R = unknown>({ title, subtitle, body, footer, size = 'md',
   const close = (result?: R): void => {
     if (closed) return;
     closed = true;
+    openModals.delete(close);
     backdrop.classList.remove('show');
     document.removeEventListener('keydown', onKey, true);
     setTimeout(() => backdrop.remove(), 160);
@@ -279,6 +284,7 @@ export function modal<R = unknown>({ title, subtitle, body, footer, size = 'md',
   backdrop.addEventListener('mousedown', (e) => { if (e.target === backdrop && dismissible) close(); });
   document.addEventListener('keydown', onKey, true);
   document.body.appendChild(backdrop);
+  openModals.add(close);
   requestAnimationFrame(() => {
     backdrop.classList.add('show');
     const f = dialog.querySelector<HTMLElement>('[autofocus], input:not([type=hidden]):not([disabled]), textarea, select');

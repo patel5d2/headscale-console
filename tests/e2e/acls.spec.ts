@@ -158,22 +158,24 @@ test.describe('access controls', () => {
     const card = (title: string) => page.locator('section.card', { has: page.getByRole('heading', { name: title, exact: true }) });
     const d = page.getByRole('dialog');
     const apply = () => d.getByRole('button', { name: 'Apply' }).click();
+    // By field, not position: a dialog that is still closing can leave its inputs in the page.
+    const chips = (field: string) => page.locator('.modal-backdrop.show .field', { has: page.getByText(field, { exact: true }) }).locator('.chip-input-field');
 
     // The first change asks before dropping comments.
     await card('Access rules').getByRole('button', { name: 'Add rule' }).click();
     await apply();
     await expect(d).toContainText('Sources needs at least one entry');
-    await d.locator('.chip-input-field').nth(0).fill('group:admins');
+    await chips('Sources').fill('group:admins');
     await apply();
     await expect(d).toContainText('Destinations needs at least one entry');
-    await d.locator('.chip-input-field').nth(1).fill('tag:router');
+    await chips('Destinations').fill('tag:router');
     await d.getByLabel('Protocol').selectOption('tcp');
     await apply();
     await page.getByRole('dialog', { name: 'Remove comments?' }).getByRole('button', { name: 'Cancel' }).click(); // keep comments
     await expect(card('Access rules').locator('tbody tr')).toHaveCount(2);
     await card('Access rules').getByRole('button', { name: 'Add rule' }).click();
-    await d.locator('.chip-input-field').nth(0).fill('group:admins');
-    await d.locator('.chip-input-field').nth(1).fill('tag:router');
+    await chips('Sources').fill('group:admins');
+    await chips('Destinations').fill('tag:router');
     await d.getByLabel('Protocol').selectOption('tcp');
     await apply();
     await page.getByRole('button', { name: 'Continue' }).click();
@@ -187,7 +189,7 @@ test.describe('access controls', () => {
       await page.getByRole('menuitem', { name: item }).click();
     };
     await rowMenu('Access rules', 2, 'Edit…');
-    await d.locator('.chip-input-field').nth(1).fill('*');
+    await chips('Destinations').fill('*');
     await d.getByLabel('Protocol').selectOption('');
     await apply();
     await expect(card('Access rules').locator('tbody tr').last()).toContainText('*:*');
@@ -198,8 +200,8 @@ test.describe('access controls', () => {
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await card('SSH rules').getByRole('button', { name: 'Add SSH rule' }).click();
     await d.getByLabel('Mode').selectOption('check');
-    await d.locator('.chip-input-field').nth(0).fill('group:admins');
-    await d.locator('.chip-input-field').nth(1).fill('tag:router');
+    await chips('Who').fill('group:admins');
+    await chips('Into').fill('tag:router');
     await apply();
     await expect(card('SSH rules').locator('tbody tr')).toHaveCount(2);
     await expect(card('SSH rules').locator('tbody tr').last()).toContainText('check');

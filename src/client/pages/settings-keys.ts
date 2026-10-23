@@ -89,7 +89,9 @@ export async function authKeys(ctx: Ctx, panel: HTMLElement): Promise<void> {
 
   await refresh();
   const preselect = store.get<string | null>('newKeyUser', null);
-  if (preselect) { store.del('newKeyUser'); createAuthKey(ctx, () => void refresh(), preselect); }
+  store.del('newKeyUser');
+  // Only if this page is still showing: the user may have left while the keys loaded.
+  if (preselect && panel.isConnected) createAuthKey(ctx, () => void refresh(), preselect);
 }
 
 async function keyAction(ctx: Ctx, k: PreAuthKey, kind: 'expire' | 'delete', after: () => Promise<void>): Promise<void> {

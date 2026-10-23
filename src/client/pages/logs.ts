@@ -1,11 +1,15 @@
 // Logs: Headscale's journald log (served by host.ts) with level counts, grouped
-// errors/warnings and search.
+// errors/warnings and search; plus device logs and network activity, collected
+// automatically once turned on (logs-collect.ts).
 import { analyze, parseEntry, type Entry, type Level } from '../../shared/logparse.js';
 import type { Ctx } from '../types.js';
 import type { BadgeKind } from '../ui.js';
-import { badge, button, callout, clear, codeBlock, errorState, h, put, spinner } from '../ui.js';
-import { debounce, download } from '../util.js';
+import { badge, button, callout, clear, codeBlock, errorState, h, put, spinner, tabs } from '../ui.js';
+import { debounce, download, store } from '../util.js';
+import { activityView, collectionCard, devicesView } from './logs-collect.js';
 import { installCmd } from './updates.js';
+
+type Tab = 'server' | 'devices' | 'activity';
 
 const RANGES: Array<[string, string]> = [['15m', 'Last 15 minutes'], ['1h', 'Last hour'], ['6h', 'Last 6 hours'], ['24h', 'Last 24 hours'], ['7d', 'Last 7 days']];
 const LINES: Array<[string, string]> = [['500', '500 lines'], ['2000', '2,000 lines'], ['10000', '10,000 lines']];
@@ -16,9 +20,27 @@ const select = (opts: Array<[string, string]>, value: string, label: string): HT
   h('select', { class: 'input input-sm', 'aria-label': label }, opts.map(([v, l]) => h('option', { value: v, selected: v === value }, l)));
 const time = (t: number): string => new Date(t).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-export async function render(ctx: Ctx, _params: unknown, root: HTMLElement): Promise<void> {
+export async function render(ctx: Ctx, { tab }: { tab?: string }, root: HTMLElement): Promise<void> {
+  const view: Tab = tab === 'devices' || tab === 'activity' || tab === 'server' ? tab : store.get<Tab>('logs.tab', 'server');
+  store.set('logs.tab', view);
   root.append(h('div', { class: 'page-head' },
-    h('div', h('h1', 'Logs'), h('p', { class: 'muted' }, 'Headscale server logs, with errors and warnings grouped so problems stand out.'))));
+    h('div', h('h1', 'Logs'), h('p', { class: 'muted' }, 'Headscale\'s log, every device\'s Tailscale log and network activity, in one place.'))));
+  const rerender = (): void => { clear(root); void render(ctx, { tab: view }, root); };
+  const st = ctx.config.auditLog ? await ctx.api.collector().catch(() => null) : null;
+  const pane = h('div', { class: 'stack' });
+  root.append(collectionCard(ctx, st, rerender),
+    tabs<Tab>([
+      { id: 'server', label: 'Headscale server', icon: 'server' },
+      { id: 'devices', label: 'Devices', icon: 'machines' },
+      { id: 'activity', label: 'Network activity', icon: 'activity' },
+    ], view, (id) => ctx.navigate(`#/logs/${id}`)),
+    pane);
+  if (view === 'devices') return devicesView(ctx, st, pane, rerender);
+  if (view === 'activity') return activityView(ctx, st, pane);
+  return serverLog(ctx, pane);
+}
+
+async function serverLog(ctx: Ctx, root: HTMLElement): Promise<void> {
   if (!ctx.config.hostActions) { root.append(setupHelp(ctx)); return; }
 
   let entries: Entry[] = [];
