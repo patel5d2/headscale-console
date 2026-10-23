@@ -33,9 +33,17 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # GHCR shows the description on the package page, under its own "docker pull"
+      # line, so it carries the command that actually starts the console.
       - id: meta
         uses: docker/metadata-action@v5
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
         with:
+          labels: |
+            org.opencontainers.image.description=Web admin console for Headscale. Run: docker run -d --name headscale-console --restart unless-stopped -p 8090:8080 -v headscale-console-data:/data ghcr.io/patel5d2/headscale-console:latest then open http://localhost:8090
+          annotations: |
+            org.opencontainers.image.description=Web admin console for Headscale. Run: docker run -d --name headscale-console --restart unless-stopped -p 8090:8080 -v headscale-console-data:/data ghcr.io/patel5d2/headscale-console:latest then open http://localhost:8090
           images: ghcr.io/${{ github.repository_owner }}/headscale-console
           tags: |
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
@@ -51,6 +59,7 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Smoke test

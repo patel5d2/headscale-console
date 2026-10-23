@@ -15,16 +15,19 @@ A clean, Tailscale-style web admin console for [Headscale](https://headscale.net
 
 ## Quick start
 
-### Prebuilt image (fastest)
+### Run it (one command)
+
+Creates and starts the container; nothing to download or build first:
 
 ```bash
-docker run -d --name headscale-console --restart unless-stopped -p 8090:8080 \
-  -e HEADSCALE_URL=https://headscale.example.com \
-  -v headscale-console-data:/data \
-  ghcr.io/patel5d2/headscale-console:latest
+docker run -d --name headscale-console --restart unless-stopped -p 8090:8080 -v headscale-console-data:/data ghcr.io/patel5d2/headscale-console:latest
 ```
 
-Open **http://&lt;host&gt;:8090** and paste an API key. Leave out `HEADSCALE_URL` to type the server URL on the login page instead. Tags: `latest` (main), a release such as `2.0.0`, or `sha-<commit>`. With Compose: `docker compose -f docker-compose.ghcr.yml up -d`.
+Open **http://localhost:8090** (or `http://<host>:8090`), enter your Headscale URL and an API key.
+
+To lock the console to your server (turns on Browser SSH, the audit log and policy history), add `-e HEADSCALE_URL=https://your-headscale` before the image name. To update later: `docker rm -f headscale-console && docker pull ghcr.io/patel5d2/headscale-console:latest`, then run the command again (settings are kept in the `headscale-console-data` volume).
+
+With Compose instead: `curl -fsSLO https://raw.githubusercontent.com/patel5d2/headscale-console/main/docker-compose.ghcr.yml && docker compose -f docker-compose.ghcr.yml up -d`
 
 ### Docker Compose (build from source)
 

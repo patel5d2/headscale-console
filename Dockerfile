@@ -20,7 +20,7 @@ RUN if [ -s /stage/hp_ssh.wasm ] && [ -s /stage/wasm_exec.js ]; then \
 
 FROM node:22-alpine AS app
 LABEL org.opencontainers.image.title="headscale-console" \
-      org.opencontainers.image.description="Tailscale-style web admin console for Headscale" \
+      org.opencontainers.image.description="Web admin console for Headscale. Run: docker run -d --name headscale-console --restart unless-stopped -p 8090:8080 -v headscale-console-data:/data ghcr.io/patel5d2/headscale-console:latest then open http://localhost:8090" \
       org.opencontainers.image.source="https://github.com/patel5d2/headscale-console" \
       org.opencontainers.image.licenses="MIT"
 ENV NODE_ENV=production PORT=8080 HOST=0.0.0.0 DATA_DIR=/data
