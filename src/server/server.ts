@@ -2,14 +2,15 @@
 /**
  * Headscale Console server: the static UI, the Headscale API proxy, Browser SSH's
  * control relay, host actions, and the audit log / policy history. Zero runtime
- * dependencies (Node 20+). Configuration is environment variables; see config.ts.
+ * dependencies (Node 22.15+). Configuration is environment variables; see config.ts.
  */
+import './privileges.js'; // first: leaves root before anything else runs
 import fs from 'node:fs';
 import http from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import path from 'node:path';
 import {
-  ALLOWED_HOSTS, BROWSER_SSH, HEADSCALE_UNIT, HOST, HOST_ACTIONS, HOST_ACTIONS_WANTED, INSECURE_TLS, LOCKED_URL, PORT, PUBLIC_DIR,
+  ALLOWED_HOSTS, BROWSER_SSH, HEADSCALE_UNIT, HOST, HOST_ACTIONS, HOST_ACTIONS_WANTED, INSECURE_TLS, LOCKED_URL, PORT, PUBLIC_DIR, PUBLIC_URL,
 } from './config.js';
 import { handleCollector, startCollector } from './collector.js';
 import { handleHost } from './host.js';
@@ -76,6 +77,7 @@ export const server = http.createServer((req, res) => {
       hostActions: HOST_ACTIONS,
       browserSsh: BROWSER_SSH,
       auditLog: AUDIT_ENABLED,
+      publicUrl: PUBLIC_URL || null,
     });
   }
   // Control-plane key fetch for the Browser SSH client (see handleUpgrade).

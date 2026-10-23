@@ -40,5 +40,30 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget -qO- "http://127.0.0.1:${PORT}/healthz" >/dev/null || exit 1
 CMD ["node", "dist/server/server.js"]
 
+# Every feature, for the machine that runs Headscale from its .deb (docker-compose.full.yml):
+# adds journalctl, which reads the host's mounted journal. Starts as root only to become
+# "node" with the journal's group straight away (src/server/privileges.ts).
+FROM node:22-trixie-slim AS host
+LABEL org.opencontainers.image.title="headscale-console (host)" \
+      org.opencontainers.image.source="https://github.com/patel5d2/headscale-console" \
+      org.opencontainers.image.licenses="MIT"
+RUN apt-get update && apt-get install -y --no-install-recommends systemd && rm -rf /var/lib/apt/lists/*
+ENV NODE_ENV=production PORT=8080 HOST=0.0.0.0 DATA_DIR=/data
+WORKDIR /app
+COPY --from=build /build/package.json ./
+COPY --from=build /build/dist ./dist
+COPY --from=build /build/public ./public
+RUN rm -rf public/ssh
+COPY --from=ssh /out ./public/ssh
+RUN chmod 0755 dist/cli/hsconsole.js && \
+    ln -s /app/dist/cli/hsconsole.js /usr/local/bin/hsconsole && \
+    mkdir -p /data && chown node:node /data && chmod 0700 /data
+VOLUME ["/data"]
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/healthz').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
+CMD ["node", "dist/server/server.js"]
+
+# The default image: Browser SSH included.
 FROM app AS full
 COPY --from=ssh /out ./public/ssh

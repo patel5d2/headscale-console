@@ -55,3 +55,7 @@ export const POLICY_HISTORY_MAX = parseInt(env.POLICY_HISTORY_MAX || '', 10) || 
 export const ACTIVITY_POLL_MS = parseInt(env.ACTIVITY_POLL_MS || '', 10) || 30_000;
 /** Each device's log rotates to <label>.jsonl.1 past this size (default 5 MB). */
 export const DEVICE_LOG_MAX_BYTES = parseInt(env.DEVICE_LOG_MAX_BYTES || '', 10) || 5 * 1024 * 1024;
+/** The console's own address as devices reach it (put in their log settings); default: what the browser uses. */
+export const PUBLIC_URL = /^https?:\/\/[A-Za-z0-9.:[\]_-]+(\/[A-Za-z0-9._~/-]*)?$/.test(env.PUBLIC_URL || '') ? env.PUBLIC_URL!.replace(/\/+$/, '') : '';
+/** Turns automatic log collection on at start-up with this API key (instead of the button on the Logs page). */
+export const COLLECTOR_API_KEY = env.COLLECTOR_API_KEY || '';

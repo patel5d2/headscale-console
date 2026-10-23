@@ -56,9 +56,9 @@ function envFor(name: ServerName): NodeJS.ProcessEnv {
         PATH: `${bin}:${process.env.PATH}`,
       };
     case 'open':
-      return { ...base, ALLOWED_HEADSCALE_HOSTS: '127.0.0.1, localhost', HEADSCALE_RELEASES_URL: `${MOCK}/__mock/releases` };
+      return { ...base, ALLOWED_HEADSCALE_HOSTS: '127.0.0.1, localhost', HEADSCALE_RELEASES_URL: `${MOCK}/__mock/releases`, PUBLIC_URL: 'https://console.example.com:8443/' };
     case 'bare':
-      return { ...base, HOST_ACTIONS: 'yes', HEADSCALE_INSECURE_TLS: 'true', HEADSCALE_RELEASES_URL: 'http://127.0.0.1:9/' };
+      return { ...base, HOST_ACTIONS: 'yes', HEADSCALE_INSECURE_TLS: 'true', HEADSCALE_RELEASES_URL: 'http://127.0.0.1:9/', PUBLIC_URL: 'javascript:alert(1)' };
     case 'broken':
       // A data directory inside a regular file can't be created on any OS, even as root.
       // (Not /proc: on Linux, Node's recursive mkdir there never returns.)

@@ -1,0 +1,56 @@
+# Headscale Console with every feature on. Run it on the machine where Headscale is
+# installed from its .deb (systemd), so it can read Headscale's log and update it:
+#
+#   sudo ./deploy/install-vm.sh --helper-only     # once: root helper for updates + device logs
+#   cp .env.example .env                          # set HEADSCALE_URL (and PUBLIC_URL, COLLECTOR_API_KEY)
+#   docker compose -f docker-compose.full.yml up -d
+#
+# Then open http://<server>:8090. Every feature is on:
+#   locked to HEADSCALE_URL · Browser SSH · audit log · policy history · backup/restore
+#   Logs: Headscale's journal, device logs, network activity (collected automatically)
+#   one-click Headscale updates · "Allow device logs" from the console
+services:
+  headscale-console:
+    image: ghcr.io/patel5d2/headscale-console:${HEADSCALE_CONSOLE_TAG:-latest}-host
+    build:
+      context: .
+      target: host
+    container_name: headscale-console
+    restart: unless-stopped
+    ports:
+      - "8090:8080"
+    environment:
+      HEADSCALE_URL: "${HEADSCALE_URL:?Set HEADSCALE_URL in .env, e.g. https://hs.example.com}"
+      # The console's address as devices reach it (put in their log settings), e.g. its
+      # https address behind a reverse proxy, or its tailnet address. Optional.
+      PUBLIC_URL: "${PUBLIC_URL:-}"
+      # An API key (headscale apikeys create --expiration 1y) turns automatic log collection
+      # on at start-up. Optional: the "Turn on" button on the Logs page does the same.
+      COLLECTOR_API_KEY: "${COLLECTOR_API_KEY:-}"
+      HOST_ACTIONS: "true"
+      HEADSCALE_UNIT: "${HEADSCALE_UNIT:-headscale}"
+      DATA_DIR: /data
+      STATE_DIRECTORY: /var/lib/headscale-console
+      UPDATE_STATUS_DIR: /var/lib/headscale-console-update
+      TZ: "${TZ:-UTC}"
+    volumes:
+      - console-data:/data
+      # Shared with the root helper (created by install-vm.sh --helper-only).
+      - /var/lib/headscale-console:/var/lib/headscale-console
+      - /var/lib/headscale-console-update:/var/lib/headscale-console-update:ro
+      # The host's journal, read-only, for the Logs page.
+      - /var/log/journal:/var/log/journal:ro
+      - /run/log/journal:/run/log/journal:ro
+      - /etc/machine-id:/etc/machine-id:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    # The container starts as root only to switch to "node" with the journal's group
+    # (src/server/privileges.ts); these two capabilities are all that switch needs.
+    cap_drop: [ALL]
+    cap_add: [SETUID, SETGID]
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  console-data:

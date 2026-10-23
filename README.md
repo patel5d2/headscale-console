@@ -29,6 +29,18 @@ To lock the console to your server (turns on Browser SSH, the audit log and poli
 
 With Compose instead: `curl -fsSLO https://raw.githubusercontent.com/patel5d2/headscale-console/main/docker-compose.ghcr.yml && docker compose -f docker-compose.ghcr.yml up -d`
 
+### Every feature (Docker on the Headscale server)
+
+On the machine where Headscale is installed from its `.deb`, `docker-compose.full.yml` turns everything on: Browser SSH, the audit log, policy history, all three Logs tabs (Headscale's journal, device logs, network activity) and one-click Headscale updates.
+
+```bash
+sudo ./deploy/install-vm.sh --helper-only   # once: the root helper behind updates and "Allow device logs"
+cp .env.example .env                        # set HEADSCALE_URL; optionally PUBLIC_URL and COLLECTOR_API_KEY
+docker compose -f docker-compose.full.yml up -d
+```
+
+It uses the `-host` image (adds `journalctl`). The container starts as root only to switch to an unprivileged user that can read the mounted journal, keeps just `SETUID`/`SETGID` for that, and runs read-only. With `COLLECTOR_API_KEY` set, log collection is on from the start; with `PUBLIC_URL`, device log commands use that address.
+
 ### Docker Compose (build from source)
 
 ```bash
@@ -82,6 +94,9 @@ All settings are environment variables; none are required.
 | `AUDIT_LOG` | on | Set `false` to stop recording changes. Needs `HEADSCALE_URL`. |
 | `AUDIT_MAX_BYTES` | `10485760` | The audit log rotates to `audit.jsonl.1` past this size. |
 | `POLICY_HISTORY_MAX` | `200` | Policy versions kept. |
+| `PUBLIC_URL` | — | The console's address as devices reach it; the default for device log commands (otherwise the address in your browser). |
+| `COLLECTOR_API_KEY` | — | Turns automatic log collection on at start-up with this API key (instead of the button on the Logs page). |
+| `RUN_AS` | `1000` | The user the `-host` image switches to after starting as root. |
 | `ACTIVITY_POLL_MS` | `30000` | How often automatic collection checks the tailnet for network activity. |
 | `DEVICE_LOG_MAX_BYTES` | `5242880` | Each device's log rotates to `.1` past this size. |
 | `HEADSCALE_RELEASES_URL` | GitHub releases API | Release feed for update checks (e.g. a mirror). |
@@ -210,6 +225,7 @@ Run the console on the Headscale server, then everything is collected for you:
 
 ```bash
 sudo ./deploy/install-vm.sh --url https://hs.example.com --host-actions
+# or in Docker: see "Every feature" above (docker-compose.full.yml)
 ```
 
 1. **Logs → Turn on automatic collection** (one click). The console creates an API key of its own (valid one year, stored in `DATA_DIR/collector.json`, readable only by the console) so collection keeps running when nobody is signed in. Network activity starts being recorded straight away; nothing is installed on any device.

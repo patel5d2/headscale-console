@@ -95,7 +95,10 @@ export function savePolicyVersion(text: string, actor: string): void {
     const ids = versionIds();
     const last = ids[ids.length - 1];
     if (last && fs.readFileSync(path.join(HISTORY_DIR, last), 'utf8') === text) return; // unchanged
-    const stamp = new Date().toISOString().replace(/[-:.]/g, '');
+    // Strictly after the newest version: ids sort by time, and two saves in one
+    // millisecond must neither swap places nor overwrite each other.
+    const lastAt = last ? Date.parse(last.replace(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(\d{3})Z.*$/, '$1-$2-$3T$4:$5:$6.$7Z')) : 0;
+    const stamp = new Date(Math.max(Date.now(), lastAt + 1)).toISOString().replace(/[-:.]/g, '');
     fs.writeFileSync(path.join(HISTORY_DIR, `${stamp}-${actor.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32) || 'unknown'}.hujson`), text, { mode: 0o600 });
     for (const old of versionIds().slice(0, -POLICY_HISTORY_MAX)) fs.unlinkSync(path.join(HISTORY_DIR, old));
   } catch (e) {

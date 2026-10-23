@@ -9,6 +9,8 @@ export interface ConsoleConfig {
   hostActions?: boolean;
   browserSsh?: boolean;
   auditLog?: boolean;
+  /** PUBLIC_URL: the console's address as devices reach it. */
+  publicUrl?: string | null;
 }
 
 export interface Conn { url: string; key: string; remember?: boolean }

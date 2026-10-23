@@ -298,7 +298,7 @@ export function addDevice(ctx: Ctx, after?: After, { initialTab = 'key', userId 
         ctx.invalidate();
         // With automatic collection on, the commands also send the device's log here.
         const st = ctx.config.auditLog ? await ctx.api.collector().catch(() => null) : null;
-        out.appendChild(keyResult(url, k.key, tags, logTarget(st, `k${k.id}`)));
+        out.appendChild(keyResult(url, k.key, tags, logTarget(ctx, st, `k${k.id}`)));
       } catch (e) {
         out.appendChild(callout('error', null, (e as Error).message));
       } finally { gen.disabled = false; gen.classList.remove('loading'); }

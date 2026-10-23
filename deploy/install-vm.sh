@@ -6,6 +6,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage: sudo ./deploy/install-vm.sh [--url URL] [--port PORT] [--host-actions]
+       sudo ./deploy/install-vm.sh --helper-only
        sudo ./deploy/install-vm.sh --uninstall [--purge]
 
   --url URL        Lock the console to this Headscale server (recommended; needed
@@ -13,6 +14,9 @@ Usage: sudo ./deploy/install-vm.sh [--url URL] [--port PORT] [--host-actions]
   --port PORT      Port to listen on (default 8090).
   --host-actions   Also enable the Logs page and one-click Headscale updates. Only
                    when Headscale itself was installed from the official .deb here.
+  --helper-only    For the console in Docker (docker-compose.full.yml): install just the
+                   root helper behind one-click updates and "Allow device logs", and the
+                   folders the container shares with it. Node.js is not needed.
   --uninstall      Stop and remove the console. Its data (audit log, policy
                    history) is kept unless --purge is given too.
   -h, --help       Show this help.
@@ -24,13 +28,14 @@ EOF
 SRC_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 DEST=/opt/headscale-console
 UNIT=/etc/systemd/system/headscale-console.service
-HS_URL="" PORT=8090 HOST_ACTIONS=0 UNINSTALL=0 PURGE=0
+HS_URL="" PORT=8090 HOST_ACTIONS=0 HELPER_ONLY=0 UNINSTALL=0 PURGE=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --url) HS_URL="${2:-}"; shift 2 ;;
     --port) PORT="${2:-}"; shift 2 ;;
     --host-actions) HOST_ACTIONS=1; shift ;;
+    --helper-only) HELPER_ONLY=1; shift ;;
     --uninstall) UNINSTALL=1; shift ;;
     --purge) PURGE=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -57,6 +62,23 @@ if [[ $UNINSTALL == 1 ]]; then
   else
     echo "Removed. The audit log and policy history are still in /var/lib/headscale-console (use --purge to delete them)."
   fi
+  exit 0
+fi
+
+install_helper() {
+  install -o root -g root -m 0755 "$SRC_DIR/deploy/headscale-update.sh" /usr/local/sbin/headscale-console-update
+  install -o root -g root -m 0644 "$SRC_DIR/deploy/headscale-console-update.service" "$SRC_DIR/deploy/headscale-console-update.path" /etc/systemd/system/
+  systemctl daemon-reload
+  systemctl enable --now headscale-console-update.path
+}
+
+if [[ $HELPER_ONLY == 1 ]]; then
+  step "Installing the root helper for the console in Docker"
+  # The container runs as uid 1000 ("node"): it writes requests here and nowhere else on the host.
+  install -d -o 1000 -g 1000 -m 0700 /var/lib/headscale-console
+  install -d -o root -g root -m 0755 /var/lib/headscale-console-update
+  install_helper
+  echo "Done. Start the console with: docker compose -f docker-compose.full.yml up -d"
   exit 0
 fi
 
@@ -101,10 +123,7 @@ sed -i "s|^Environment=PORT=.*|Environment=PORT=${PORT}|" "$UNIT"
 if [[ $HOST_ACTIONS == 1 ]]; then
   step "Enabling host actions (logs + updates)"
   sed -i "s|^# Environment=HOST_ACTIONS=.*|Environment=HOST_ACTIONS=true|" "$UNIT"
-  install -o root -g root -m 0755 "$SRC_DIR/deploy/headscale-update.sh" /usr/local/sbin/headscale-console-update
-  install -o root -g root -m 0644 "$SRC_DIR/deploy/headscale-console-update.service" "$SRC_DIR/deploy/headscale-console-update.path" /etc/systemd/system/
-  systemctl daemon-reload
-  systemctl enable --now headscale-console-update.path
+  install_helper
 fi
 
 systemctl daemon-reload

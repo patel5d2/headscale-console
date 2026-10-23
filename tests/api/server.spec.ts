@@ -48,9 +48,10 @@ test.describe('static files and routing', () => {
   test('health, config, SPA fallback and security headers', async ({ request }) => {
     expect(await (await request.get(`${url('full')}/healthz`)).json()).toEqual({ status: 'ok' });
     expect(await (await request.get(`${url('full')}/console-config.json`)).json()).toEqual({
-      lockedUrl: MOCK, allowedHosts: [], insecureTls: false, hostActions: true, browserSsh: true, auditLog: true,
+      lockedUrl: MOCK, allowedHosts: [], insecureTls: false, hostActions: true, browserSsh: true, auditLog: true, publicUrl: null,
     });
-    expect(await (await request.get(`${url('open')}/console-config.json`)).json()).toMatchObject({ lockedUrl: null, allowedHosts: ['127.0.0.1', 'localhost'], hostActions: false, browserSsh: false, auditLog: false });
+    expect(await (await request.get(`${url('open')}/console-config.json`)).json()).toMatchObject({ lockedUrl: null, allowedHosts: ['127.0.0.1', 'localhost'], hostActions: false, browserSsh: false, auditLog: false, publicUrl: 'https://console.example.com:8443' });
+    expect((await (await request.get(`${url('bare')}/console-config.json`)).json()).publicUrl).toBeNull(); // an invalid PUBLIC_URL is ignored
     expect(await (await request.get(`${url('bare')}/console-config.json`)).json()).toMatchObject({ lockedUrl: null, insecureTls: true, hostActions: false });
     expect(await (await request.get(`${url('broken')}/console-config.json`)).json()).toMatchObject({ lockedUrl: MOCK, hostActions: true, browserSsh: false, auditLog: false });
 

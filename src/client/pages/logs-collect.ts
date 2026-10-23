@@ -8,12 +8,12 @@ import type { BadgeKind } from '../ui.js';
 import { badge, button, callout, clear, codeBlock, confirmDialog, emptyState, errorState, h, modal, put, spinner, tabs, toast } from '../ui.js';
 import { debounce, download, fmtDate, nodeName, relTime, store } from '../util.js';
 
-/** The address devices send their logs to: this console as they can reach it. */
-export const deviceBase = (): string => store.get('logs.deviceUrl', location.origin).replace(/\/+$/, '');
+/** The address devices send their logs to: set on this page, else PUBLIC_URL, else what this browser uses. */
+export const deviceBase = (ctx: Ctx): string => store.get('logs.deviceUrl', ctx.config.publicUrl || location.origin).replace(/\/+$/, '');
 
 /** A device's log address, or undefined while collection is off. */
-export const logTarget = (st: CollectorStatus | null, label: string): string | undefined =>
-  st?.enabled && st.ingestPath ? `${deviceBase()}/${st.ingestPath}/${label}` : undefined;
+export const logTarget = (ctx: Ctx, st: CollectorStatus | null, label: string): string | undefined =>
+  st?.enabled && st.ingestPath ? `${deviceBase(ctx)}/${st.ingestPath}/${label}` : undefined;
 
 /** Why devices might not reach `base`, or null if it looks fine. */
 export function addressProblem(base: string): string | null {
@@ -75,11 +75,11 @@ export function collectionCard(ctx: Ctx, st: CollectorStatus | null, changed: ()
 // ---------------------------------------------------------------- devices --
 const labelsFor = (n: Node): string[] => [`n${n.id}`, ...(n.preAuthKey?.id ? [`k${n.preAuthKey.id}`] : [])];
 
-function setupDialog(st: CollectorStatus, n: Node): void {
+function setupDialog(ctx: Ctx, st: CollectorStatus, n: Node): void {
   let os: JoinOS = 'linux';
   const box = h('div');
   const show = (): void => {
-    const step = logStep(os, logTarget(st, `n${n.id}`));
+    const step = logStep(os, logTarget(ctx, st, `n${n.id}`));
     clear(box).append(os === 'docker' || os === 'compose'
       ? h('p', { class: 'help' }, 'Add this environment variable to the Tailscale container and recreate it:', codeBlock(step))
       : codeBlock(step));
@@ -123,7 +123,7 @@ function logViewer(ctx: Ctx, label: string, title: string): HTMLElement {
 export async function devicesView(ctx: Ctx, st: CollectorStatus | null, root: HTMLElement, changed: () => void): Promise<void> {
   if (!st?.enabled) { root.append(emptyState('server', 'Device logs are off', 'Turn on automatic collection above first.')); return; }
   const permission = st.headscaleLogtail === 'on' ? null : headscalePermission(ctx, st, changed);
-  const address = h('input', { class: 'input mono', value: deviceBase(), spellcheck: 'false', 'aria-label': 'Address devices use to reach this console' });
+  const address = h('input', { class: 'input mono', value: deviceBase(ctx), spellcheck: 'false', 'aria-label': 'Address devices use to reach this console' });
   const addressNote = h('div');
   const checkAddress = (): void => { const p = addressProblem(address.value.trim()); clear(addressNote).append(p ? callout('warning', null, p) : ''); };
   address.addEventListener('change', () => { store.set('logs.deviceUrl', address.value.trim().replace(/\/+$/, '')); checkAddress(); });
@@ -153,7 +153,7 @@ export async function devicesView(ctx: Ctx, st: CollectorStatus | null, root: HT
       h('td', { class: 'muted hide-sm' }, last ? relTime(new Date(last)) : '—'),
       h('td', { class: 'col-actions' }, mine.length
         ? h('div', { class: 'row-gap' }, mine.map((l) => button(mine.length > 1 ? `View ${l.label}` : 'View log', { size: 'sm', onClick: () => open(l.label, nodeName(n)) })))
-        : button('Set up…', { size: 'sm', onClick: () => setupDialog(st, n) })));
+        : button('Set up…', { size: 'sm', onClick: () => setupDialog(ctx, st, n) })));
   });
   const others = labels.filter((l) => !known.has(l.label)).map((l) => h('tr',
     h('td', { class: 'muted' }, `Removed machine (${l.label})`), h('td', badge('Old', 'neutral')),

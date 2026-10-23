@@ -21,7 +21,7 @@ import { normalizeNode } from '../shared/api.js';
 import { expiryState, nodeName, nodeTags, userLabel } from '../shared/model.js';
 import type { Node } from '../shared/types.js';
 import { requireApiKey } from './auth.js';
-import { ACTIVITY_POLL_MS, AUDIT_MAX_BYTES, DATA_DIR, HOST_ACTIONS, UPDATE_STATUS_DIR } from './config.js';
+import { ACTIVITY_POLL_MS, AUDIT_MAX_BYTES, COLLECTOR_API_KEY, DATA_DIR, HOST_ACTIONS, UPDATE_STATUS_DIR } from './config.js';
 import { HttpError, log, readJSON, sendJSON, upstreamGet } from './http.js';
 import { AUDIT_ENABLED } from './store.js';
 
@@ -113,11 +113,26 @@ function schedule(): void {
   timer.unref();
 }
 
-/** Loads a saved configuration and starts polling (called once at startup). */
+/** Turns collection on with `key` after checking Headscale accepts it. */
+async function enable(key: string): Promise<void> {
+  const check = await upstreamGet('api/v1/node', `Bearer ${key}`);
+  if (check.status !== 200) throw new HttpError(400, 'Headscale rejected that API key');
+  config = { key, token: config?.token ?? crypto.randomBytes(18).toString('base64url'), since: new Date().toISOString() };
+  writePrivate(CONFIG_FILE, config);
+  await tick();
+}
+
+/** Loads a saved configuration, or uses COLLECTOR_API_KEY, and starts polling (called once at startup). */
 export function startCollector(): void {
   if (!AUDIT_ENABLED) return;
   config = readJsonFile<Config>(CONFIG_FILE);
-  if (config) { log('Automatic log collection enabled'); void tick(); }
+  if (config) { log('Automatic log collection enabled'); void tick(); return; }
+  if (COLLECTOR_API_KEY) {
+    void enable(COLLECTOR_API_KEY).then(
+      () => log('Automatic log collection turned on with COLLECTOR_API_KEY'),
+      (e: Error) => log(`COLLECTOR_API_KEY not used: ${e.message}`),
+    );
+  }
 }
 
 export function readActivity(limit: number, q: string): Activity[] {
@@ -154,13 +169,8 @@ export async function handleCollector(req: IncomingMessage, res: ServerResponse,
     } else if (rest === 'collector' && req.method === 'POST') {
       const key = String((await readJSON(req, res, 2048)).key || '');
       if (!/^[\x21-\x7e]{8,512}$/.test(key)) throw new HttpError(400, 'Missing API key');
-      const check = await upstreamGet('api/v1/node', `Bearer ${key}`);
-      if (check.status !== 200) throw new HttpError(400, 'Headscale rejected that API key');
-      config = { key, token: config?.token ?? crypto.randomBytes(18).toString('base64url'), since: new Date().toISOString() };
-      writePrivate(CONFIG_FILE, config);
+      await enable(key);
       log(`Automatic log collection turned on from ${req.socket.remoteAddress}`);
-      await poll();
-      schedule();
       sendJSON(res, 200, status());
     } else if (rest === 'collector' && req.method === 'DELETE') {
       const prefix = config?.key.match(/^hskey-api-([A-Za-z0-9]+)-/)?.[1] ?? config?.key.split('.')[0] ?? null;
